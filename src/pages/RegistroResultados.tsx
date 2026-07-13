@@ -143,7 +143,7 @@ function similarityScore(a: string, b: string): number {
   return 1 - levenshteinDistance(a, b) / maxLength;
 }
 
-function buildOcrTemplateText(blankRows = 14): string {
+function buildOcrTemplateText(blankRows = 28): string {
   const header = [
     '# MODELO OCR - POKER',
     '# 1 linha por participante, mantendo os rótulos',
@@ -503,21 +503,27 @@ export default function RegistroResultados() {
     const etapaTitulo = etapaSelecionada
       ? `${etapaSelecionada.codigo_etapa} - ${new Date(etapaSelecionada.data_etapa).toLocaleDateString('pt-BR')}`
       : 'Etapa não selecionada';
+    const logoUrl = `${window.location.origin}/logo.png`;
 
-    const linhasTemplate = Array.from({ length: 14 }, (_, index) => {
+    const linhasTemplate = Array.from({ length: 28 }, (_, index) => {
       return `
         <tr>
-          <td>${index + 1}</td>
-          <td></td>
-          <td>jogador</td>
-          <td></td>
-          <td>0</td>
-          <td></td>
-          <td></td>
-          <td></td>
-          <td></td>
-          <td></td>
-          <td></td>
+          <td class="num-col">${index + 1}</td>
+          <td class="mark-col"><span class="circle"></span></td>
+          <td class="name-col"></td>
+          <td class="mark-col"><span class="circle"></span></td>
+          <td class="rebuy-col">
+            <div class="rebuy-grid">
+              ${Array.from({ length: 10 }, () => '<span class="circle small"></span>').join('')}
+            </div>
+          </td>
+          <td class="mark-col"><span class="circle"></span></td>
+          <td class="money-col"></td>
+          <td class="mark-col"><span class="circle"></span></td>
+          <td class="money-col"></td>
+          <td class="mark-col"><span class="circle"></span></td>
+          <td class="mark-col"><span class="circle"></span></td>
+          <td class="place-col"></td>
         </tr>
       `;
     }).join('');
@@ -533,44 +539,109 @@ export default function RegistroResultados() {
         <head>
           <title>Modelo OCR - Poker</title>
           <style>
-            body { font-family: Arial, sans-serif; margin: 24px; color: #111; }
-            h1 { margin: 0 0 6px 0; font-size: 20px; }
-            p { margin: 4px 0; font-size: 12px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 14px; }
-            th, td { border: 1px solid #333; padding: 6px; font-size: 11px; text-align: left; height: 24px; }
-            th { background: #f0f0f0; }
-            .small { font-size: 10px; color: #444; margin-top: 8px; }
-            .w-num { width: 28px; text-align: center; }
-            .w-name { width: 200px; }
-            .w-tiny { width: 65px; }
+            @page { size: A4 landscape; margin: 10mm; }
+            * { box-sizing: border-box; }
+            body { font-family: Arial, sans-serif; margin: 0; color: #111; }
+            body { font-family: Arial, sans-serif; margin: 0; color: #111; }
+            h1 { margin: 0 0 4px 0; font-size: 16px; }
+            p { margin: 2px 0; font-size: 9px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 8px; table-layout: fixed; }
+            th, td { border: 1px solid #333; padding: 2px; font-size: 8px; text-align: center; height: 20px; vertical-align: middle; }
+            th { background: #f0f0f0; font-size: 7px; line-height: 1.15; }
+            .small-text { font-size: 8px; color: #444; }
+            .num-col { width: 28px; font-weight: 700; }
+            .mark-col { width: 30px; }
+            .name-col { width: 170px; text-align: left; }
+            .rebuy-col { width: 190px; }
+            .money-col { width: 64px; }
+            .place-col { width: 48px; }
+            .circle {
+              display: inline-block;
+              width: 13px;
+              height: 13px;
+              border: 1.5px solid #111;
+              border-radius: 999px;
+            }
+            .circle.small {
+              width: 11px;
+              height: 11px;
+            }
+            .rebuy-grid {
+              display: grid;
+              grid-template-columns: repeat(10, 1fr);
+              gap: 2px;
+              align-items: center;
+            }
+            .print-header {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              gap: 10px;
+            }
+            .brand {
+              display: flex;
+              align-items: center;
+              gap: 10px;
+            }
+            .brand img {
+              width: 58px;
+              height: auto;
+              object-fit: contain;
+            }
+            .legend {
+              display: grid;
+              grid-template-columns: repeat(3, minmax(0, 1fr));
+              gap: 6px;
+              margin-top: 6px;
+            }
+            .legend div {
+              border: 1px solid #bbb;
+              padding: 4px 6px;
+              font-size: 7px;
+            }
           </style>
         </head>
         <body>
-          <h1>Modelo de Anotação OCR - Poker</h1>
-          <p><strong>Etapa:</strong> ${etapaTitulo}</p>
-          <p><strong>Data do preenchimento:</strong> ____/____/______</p>
-          <p class="small">Preencha em letra de forma, uma linha por participante. Use "sim"/"não" para campos booleanos.</p>
+          <div class="print-header">
+            <div class="brand">
+              <img src="${logoUrl}" alt="Logo Poker" />
+              <div>
+                <h1>Modelo de Anotação OCR - Poker</h1>
+                <p><strong>Etapa:</strong> ${etapaTitulo}</p>
+                <p><strong>Data do preenchimento:</strong> ____/____/______</p>
+              </div>
+            </div>
+          </div>
+          <p class="small-text">Folha em paisagem para anotação manual. Pinte os círculos para marcar opções e escreva os valores nos campos em branco.</p>
+
+          <div class="legend">
+            <div><strong>Janta:</strong> círculo marcado = participante jantou.</div>
+            <div><strong>Buy-in:</strong> círculo marcado = jogador. Em branco = visitante.</div>
+            <div><strong>Rebuy:</strong> cada círculo pintado vale 1 rebuy.</div>
+          </div>
+
           <table>
             <thead>
               <tr>
-                <th class="w-num">#</th>
-                <th class="w-name">Nome</th>
-                <th class="w-tiny">Tipo</th>
-                <th class="w-tiny">Coloc.</th>
-                <th class="w-tiny">Rebuys</th>
-                <th class="w-tiny">Add-on</th>
-                <th class="w-tiny">Jantou</th>
-                <th class="w-tiny">Chef</th>
-                <th class="w-tiny">M. Mão</th>
-                <th class="w-tiny">Salão</th>
-                <th class="w-tiny">Pagou Janta</th>
+                <th class="num-col">#</th>
+                <th class="mark-col">Janta</th>
+                <th class="name-col">Nome</th>
+                <th class="mark-col">Buy-in</th>
+                <th class="rebuy-col">Rebuys (10 círculos)</th>
+                <th class="mark-col">Add-on</th>
+                <th class="money-col">Pagou janta</th>
+                <th class="mark-col">Pagou salão</th>
+                <th class="money-col">Outros custos</th>
+                <th class="mark-col">Chef</th>
+                <th class="mark-col">Melhor mão</th>
+                <th class="place-col">Colocação</th>
               </tr>
             </thead>
             <tbody>
               ${linhasTemplate}
             </tbody>
           </table>
-          <p class="small">Depois da foto, use o formato textual padrão no sistema se quiser corrigir manualmente.</p>
+          <p class="small-text">Depois de fotografar a folha, envie a imagem no sistema para OCR e revisão.</p>
         </body>
       </html>
     `;
