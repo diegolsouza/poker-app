@@ -52,6 +52,15 @@ type TabelaAcertoRow = {
   id: number;
   nome: string;
   valorFinalLiquido: number;
+  premioColocacao: number;
+  custoBuyIn: number;
+  custoRebuy: number;
+  custoAddon: number;
+  cotaSalao: number;
+  cotaJanta: number;
+  reembolsoSalao: number;
+  reembolsoJanta: number;
+  outrosReembolsos: number;
   jantou: boolean;
   participacao: TipoParticipacao;
   melhorMao: boolean;
@@ -95,6 +104,20 @@ function getGrupoOrdenacao(colocacao: number | null): number {
   return 4;
 }
 
+function getResumoContaItens(row: TabelaAcertoRow): Array<{ label: string; valor: number }> {
+  return [
+    { label: 'Janta', valor: -row.cotaJanta },
+    { label: 'Salão', valor: -row.cotaSalao },
+    { label: 'Buy-in', valor: -row.custoBuyIn },
+    { label: row.rebuys === 1 ? '1x Rebuy' : `${row.rebuys}x Rebuys`, valor: -row.custoRebuy },
+    { label: 'Add-on', valor: -row.custoAddon },
+    { label: 'Premiação', valor: row.premioColocacao },
+    { label: 'Reembolso custo salão', valor: row.reembolsoSalao },
+    { label: 'Reembolso custo janta', valor: row.reembolsoJanta },
+    { label: 'Outros reembolsos', valor: row.outrosReembolsos },
+  ].filter((item) => Math.abs(item.valor) > 0.0001);
+}
+
 export default function TelaPix() {
   const [etapas, setEtapas] = useState<Etapa[]>([]);
   const [jogadoresMap, setJogadoresMap] = useState<Record<number, string>>({});
@@ -110,6 +133,7 @@ export default function TelaPix() {
   const [isLoadingEtapas, setIsLoadingEtapas] = useState(false);
   const [isLoadingRegistros, setIsLoadingRegistros] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [participanteSelecionadoId, setParticipanteSelecionadoId] = useState<number | null>(null);
 
   useEffect(() => {
     const carregarBase = async () => {
@@ -276,6 +300,15 @@ export default function TelaPix() {
         id: r.id,
         nome: jogadoresMap[r.jogador_id] ?? `Jogador #${r.jogador_id}`,
         valorFinalLiquido,
+        premioColocacao,
+        custoBuyIn,
+        custoRebuy,
+        custoAddon,
+        cotaSalao,
+        cotaJanta,
+        reembolsoSalao,
+        reembolsoJanta,
+        outrosReembolsos,
         jantou: r.jantou,
         participacao: r.tipo_participante,
         melhorMao: r.melhor_mao,
@@ -342,6 +375,63 @@ export default function TelaPix() {
       return a.nome.localeCompare(b.nome, 'pt-BR');
     });
   }, [calculos.tabelaAcertos]);
+
+  const participanteSelecionado = useMemo(
+    () => tabelaAcertosOrdenada.find((row) => row.id === participanteSelecionadoId) ?? null,
+    [participanteSelecionadoId, tabelaAcertosOrdenada],
+  );
+
+  const itensResumoConta = useMemo(() => {
+    if (!participanteSelecionado) {
+      return [];
+    }
+
+    return getResumoContaItens(participanteSelecionado);
+  }, [participanteSelecionado]);
+
+  const totaisResumoConta = useMemo(() => {
+    if (!participanteSelecionado) {
+      return { totalGanhos: 0, totalCustos: 0 };
+    }
+
+    const totalGanhos =
+      participanteSelecionado.premioColocacao +
+      participanteSelecionado.reembolsoSalao +
+      participanteSelecionado.reembolsoJanta +
+      participanteSelecionado.outrosReembolsos;
+
+    const totalCustos =
+      participanteSelecionado.custoBuyIn +
+      participanteSelecionado.custoRebuy +
+      participanteSelecionado.custoAddon +
+      participanteSelecionado.cotaSalao +
+      participanteSelecionado.cotaJanta;
+
+    return { totalGanhos, totalCustos };
+  }, [participanteSelecionado]);
+
+  useEffect(() => {
+    if (!participanteSelecionado) {
+      return;
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setParticipanteSelecionadoId(null);
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [participanteSelecionado]);
+
+  const abrirResumoConta = (rowId: number) => {
+    setParticipanteSelecionadoId(rowId);
+  };
+
+  const fecharResumoConta = () => {
+    setParticipanteSelecionadoId(null);
+  };
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(255,94,0,0.08),transparent_24%),linear-gradient(180deg,#061019_0%,#07131d_40%,#081723_100%)] px-4 py-8 sm:px-6 lg:px-8">
@@ -465,7 +555,13 @@ export default function TelaPix() {
                 <article key={row.id} className="rounded-xl border border-[#244357] bg-[#0b1a25] p-3 text-sm">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="truncate font-semibold text-slate-100">{row.nome}</p>
+                      <button
+                        type="button"
+                        onClick={() => abrirResumoConta(row.id)}
+                        className="max-w-full truncate font-semibold text-left text-slate-100 underline decoration-dotted underline-offset-2 transition hover:text-[#ffad7d]"
+                      >
+                        {row.nome}
+                      </button>
                       <p className="text-xs text-slate-400">
                         {row.colocacao === null
                           ? 'Sem colocação'
@@ -535,7 +631,15 @@ export default function TelaPix() {
                                   ? `${row.colocacao}º`
                                   : row.colocacao}
                           </td>
-                          <td className="px-2 py-2">{row.nome}</td>
+                          <td className="px-2 py-2">
+                            <button
+                              type="button"
+                              onClick={() => abrirResumoConta(row.id)}
+                              className="text-left text-slate-100 underline decoration-dotted underline-offset-2 transition hover:text-[#ffad7d]"
+                            >
+                              {row.nome}
+                            </button>
+                          </td>
                           <td
                             className={`px-2 py-2 font-semibold ${
                               row.valorFinalLiquido > 0
@@ -563,6 +667,91 @@ export default function TelaPix() {
             </div>
         </section>
       </section>
+
+      {participanteSelecionado ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#01060c]/75 p-3 backdrop-blur-[2px] sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-label={`Resumo das contas de ${participanteSelecionado.nome}`}>
+          <button type="button" aria-label="Fechar resumo" className="absolute inset-0 cursor-default" onClick={fecharResumoConta} />
+
+          <article className="relative z-10 w-full max-w-xl rounded-2xl border border-[#315770] bg-[#0b1a25] p-4 shadow-[0_24px_60px_rgba(0,0,0,0.45)] sm:p-5">
+            <header className="mb-3 flex items-start justify-between gap-3 border-b border-[#244357] pb-3">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-50">Resumo das contas</h3>
+                <p className="text-sm text-slate-300">{participanteSelecionado.nome}</p>
+              </div>
+
+              <button
+                type="button"
+                onClick={fecharResumoConta}
+                className="rounded-lg border border-[#315770] bg-[#102536] px-2.5 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-[#ff9a63] hover:text-[#ffcfb2]"
+              >
+                Fechar
+              </button>
+            </header>
+
+            <div className="max-h-[52vh] overflow-y-auto pr-1 sm:max-h-[60vh]">
+              <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <div className="rounded-lg border border-[#2f5268] bg-[#102536] px-3 py-2">
+                  <p className="text-[11px] uppercase tracking-wide text-slate-400">Total de custos</p>
+                  <p className="mt-1 text-sm font-semibold text-rose-300">-{formatCurrency(totaisResumoConta.totalCustos)}</p>
+                </div>
+                <div className="rounded-lg border border-[#2f5268] bg-[#102536] px-3 py-2">
+                  <p className="text-[11px] uppercase tracking-wide text-slate-400">Total de ganhos</p>
+                  <p className="mt-1 text-sm font-semibold text-emerald-300">+{formatCurrency(totaisResumoConta.totalGanhos)}</p>
+                </div>
+                <div className="rounded-lg border border-[#2f5268] bg-[#102536] px-3 py-2">
+                  <p className="text-[11px] uppercase tracking-wide text-slate-400">Saldo</p>
+                  <p
+                    className={`mt-1 text-sm font-semibold ${
+                      participanteSelecionado.valorFinalLiquido > 0
+                        ? 'text-emerald-300'
+                        : participanteSelecionado.valorFinalLiquido < 0
+                          ? 'text-rose-300'
+                          : 'text-slate-200'
+                    }`}
+                  >
+                    {formatCurrency(participanteSelecionado.valorFinalLiquido)}
+                  </p>
+                </div>
+              </div>
+
+              {itensResumoConta.length === 0 ? (
+                <p className="rounded-lg border border-[#244357] bg-[#102536] px-3 py-3 text-sm text-slate-300">
+                  Não há movimentações para exibir neste participante.
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {itensResumoConta.map((item) => (
+                    <li key={`${item.label}-${item.valor}`} className="flex items-center justify-between rounded-lg border border-[#244357] bg-[#102536] px-3 py-2 text-sm">
+                      <span className="text-slate-200">{item.label}</span>
+                      <span className={`font-semibold ${item.valor > 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                        {item.valor > 0 ? '+' : '-'}
+                        {formatCurrency(Math.abs(item.valor))}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <footer className="mt-4 border-t border-[#244357] pt-3">
+              <div className="flex items-center justify-between rounded-lg bg-[#081723] px-3 py-2">
+                <span className="text-sm text-slate-300">Resultado final</span>
+                <span
+                  className={`text-base font-semibold ${
+                    participanteSelecionado.valorFinalLiquido > 0
+                      ? 'text-emerald-300'
+                      : participanteSelecionado.valorFinalLiquido < 0
+                        ? 'text-rose-300'
+                        : 'text-slate-200'
+                  }`}
+                >
+                  {formatCurrency(participanteSelecionado.valorFinalLiquido)}
+                </span>
+              </div>
+            </footer>
+          </article>
+        </div>
+      ) : null}
     </main>
   );
 }
