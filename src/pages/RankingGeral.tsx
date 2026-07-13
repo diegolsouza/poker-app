@@ -416,7 +416,7 @@ export default function RankingGeral() {
                       <button
                         type="button"
                         onClick={() => handleOpenModal(row.jogadorId)}
-                        className="w-full truncate text-left text-sm font-semibold text-sky-300"
+                        className="w-full truncate text-left text-sm font-semibold text-[#ff9a63] transition hover:text-[#ffb387]"
                       >
                         {row.nome}
                       </button>
@@ -500,7 +500,7 @@ export default function RankingGeral() {
                       <button
                         type="button"
                         onClick={() => handleOpenModal(row.jogadorId)}
-                        className="cursor-pointer font-medium text-sky-300 hover:text-sky-200 hover:underline"
+                        className="cursor-pointer font-medium text-[#ff9a63] transition hover:text-[#ffb387]"
                       >
                         {row.nome}
                       </button>

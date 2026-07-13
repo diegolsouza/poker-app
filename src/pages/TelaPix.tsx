@@ -558,7 +558,7 @@ export default function TelaPix() {
                       <button
                         type="button"
                         onClick={() => abrirResumoConta(row.id)}
-                        className="max-w-full truncate font-semibold text-left text-slate-100 underline decoration-dotted underline-offset-2 transition hover:text-[#ffad7d]"
+                        className="max-w-full truncate font-semibold text-left text-[#ff9a63] transition hover:text-[#ffb387]"
                       >
                         {row.nome}
                       </button>
@@ -635,7 +635,7 @@ export default function TelaPix() {
                             <button
                               type="button"
                               onClick={() => abrirResumoConta(row.id)}
-                              className="text-left text-slate-100 underline decoration-dotted underline-offset-2 transition hover:text-[#ffad7d]"
+                              className="text-left text-[#ff9a63] transition hover:text-[#ffb387]"
                             >
                               {row.nome}
                             </button>
