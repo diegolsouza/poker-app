@@ -142,6 +142,7 @@ export default function PreJogo() {
   const [jogadores, setJogadores] = useState<Jogador[]>([]);
   const [etapaId, setEtapaId] = useState('');
   const [rows, setRows] = useState<string[]>(['']);
+  const [playerSelectValue, setPlayerSelectValue] = useState('');
   const [sorteio, setSorteio] = useState<SorteioMesas>({ tables: [], drawnAt: null });
   const [latePlayerId, setLatePlayerId] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -202,6 +203,7 @@ export default function PreJogo() {
 
       if (!persistedRaw) {
         setRows(['']);
+        setPlayerSelectValue('');
         setLatePlayerId('');
         setSorteio({ tables: [], drawnAt: null });
         return;
@@ -212,6 +214,7 @@ export default function PreJogo() {
         const normalized = parsePersistedState(parsed);
 
         setRows(normalized.participantIds.length > 0 ? normalizeSelectionRows(normalized.participantIds.map(String)) : ['']);
+        setPlayerSelectValue('');
         setLatePlayerId('');
         setSorteio({
           tables: normalized.tables,
@@ -222,6 +225,7 @@ export default function PreJogo() {
       } catch {
         localStorage.removeItem(storageKey);
         setRows(['']);
+        setPlayerSelectValue('');
         setLatePlayerId('');
         setSorteio({ tables: [], drawnAt: null });
       }
@@ -229,6 +233,7 @@ export default function PreJogo() {
 
     if (!etapaId) {
       setRows(['']);
+      setPlayerSelectValue('');
       setLatePlayerId('');
       setSorteio({ tables: [], drawnAt: null });
       return;
@@ -363,14 +368,6 @@ export default function PreJogo() {
     }
   }, [confirmedPlayerIds, etapaId, sorteio]);
 
-  const updateRowValue = (index: number, value: string) => {
-    setRows((prev) => {
-      const next = [...prev];
-      next[index] = value;
-      return normalizeSelectionRows(next);
-    });
-  };
-
   const addConfirmedPlayerToRows = (playerId: number) => {
     setRows((prev) => {
       const filled = prev.filter((item) => item.trim() !== '');
@@ -381,6 +378,32 @@ export default function PreJogo() {
 
       return normalizeSelectionRows([...filled, playerIdText]);
     });
+  };
+
+  const handleSelectConfirmedPlayer = (value: string) => {
+    setPlayerSelectValue(value);
+
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return;
+    }
+
+    if (confirmedPlayerIds.includes(parsed)) {
+      setError('Este jogador já está confirmado.');
+      setPlayerSelectValue('');
+      return;
+    }
+
+    if (confirmedPlayerIds.length + 1 > MAX_JOGADORES) {
+      setError(`O pré-jogo suporta no máximo ${MAX_JOGADORES} jogadores.`);
+      setPlayerSelectValue('');
+      return;
+    }
+
+    setError(null);
+    setSuccess(null);
+    addConfirmedPlayerToRows(parsed);
+    setPlayerSelectValue('');
   };
 
   const handleSortear = () => {
@@ -420,6 +443,7 @@ export default function PreJogo() {
     }
 
     setRows(['']);
+    setPlayerSelectValue('');
     setLatePlayerId('');
     setSorteio({ tables: [], drawnAt: null });
     setError(null);
@@ -484,6 +508,17 @@ export default function PreJogo() {
     }, 200);
   };
 
+  const downloadBlob = (blob: Blob, fileName: string) => {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+  };
+
   const handleExportarImagem = async () => {
     setError(null);
     setSuccess(null);
@@ -512,13 +547,7 @@ export default function PreJogo() {
           title: `Pré-jogo ${etapaSelecionadaLabel}`,
         });
       } else {
-        const dataUrl = canvas.toDataURL('image/png');
-        const link = document.createElement('a');
-        link.href = dataUrl;
-        link.download = fileName;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
+        downloadBlob(blob, fileName);
       }
 
       setSuccess('Imagem exportada com sucesso.');
@@ -542,13 +571,35 @@ export default function PreJogo() {
     setIsExporting(true);
 
     try {
+      const { default: JsPDF } = await import('jspdf');
       const canvas = await captureMesasCanvas();
-      const dataUrl = canvas.toDataURL('image/png');
-      openPrintWindow(
-        `Pré-jogo ${etapaSelecionadaLabel}`,
-        `<div class="wrap"><h1>Pré-jogo - ${etapaSelecionadaLabel}</h1><img src="${dataUrl}" alt="Mesas sorteadas" /></div>`,
-        '@page { size: A4 landscape; margin: 10mm; } body { margin: 0; font-family: Arial, sans-serif; background: #07131d; color: #fff; } .wrap { padding: 12px; } h1 { font-size: 18px; margin: 0 0 10px; } img { width: 100%; height: auto; border: 1px solid #244357; border-radius: 10px; }',
-      );
+      const imageData = canvas.toDataURL('image/png');
+      const pdf = new JsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4', compress: true });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 10;
+      const usableWidth = pageWidth - margin * 2;
+      const usableHeight = pageHeight - margin * 2 - 8;
+      const ratio = Math.min(usableWidth / canvas.width, usableHeight / canvas.height);
+      const imageWidth = canvas.width * ratio;
+      const imageHeight = canvas.height * ratio;
+      const imageX = (pageWidth - imageWidth) / 2;
+      const imageY = margin + 6;
+
+      pdf.setFontSize(12);
+      pdf.text(`Pré-jogo - ${etapaSelecionadaLabel}`, margin, margin);
+      pdf.addImage(imageData, 'PNG', imageX, imageY, imageWidth, imageHeight);
+
+      const blob = pdf.output('blob');
+      const fileName = `pre-jogo-${etapaSelecionadaLabel}.pdf`;
+      const file = new File([blob], fileName, { type: 'application/pdf' });
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: `Pré-jogo ${etapaSelecionadaLabel}` });
+      } else {
+        downloadBlob(blob, fileName);
+      }
+
       setSuccess('PDF pronto para impressão/exportação.');
     } catch (printError) {
       const message = printError instanceof Error ? printError.message : 'Erro desconhecido';
@@ -804,34 +855,25 @@ export default function PreJogo() {
             </div>
           ) : null}
 
-          <div className="max-h-[340px] space-y-2 overflow-y-auto pr-1">
-            {rows.map((value, index) => {
-              const usedByOthers = new Set(rows.filter((_, rowIndex) => rowIndex !== index).filter((item) => item !== ''));
-
-              return (
-                <label key={`${index}-${value}`} className="block text-xs text-slate-300">
-                  Jogador #{index + 1}
-                  <select
-                    value={value}
-                    onChange={(event) => updateRowValue(index, event.target.value)}
-                    disabled={isLoading}
-                    className="mt-1 h-10 w-full rounded-lg border border-[#244357] bg-[#0b1a25] px-3 text-sm text-slate-100 outline-none transition focus:border-[#ff5e00]"
-                  >
-                    <option value="">Selecione um jogador</option>
-                    {jogadores.map((jogador) => {
-                      const optionValue = String(jogador.id);
-                      const disabled = usedByOthers.has(optionValue);
-                      return (
-                        <option key={jogador.id} value={optionValue} disabled={disabled}>
-                          {jogador.nome}
-                        </option>
-                      );
-                    })}
-                  </select>
-                </label>
-              );
-            })}
-          </div>
+          <label className="block text-xs text-slate-300">
+            Selecionar jogador confirmado
+            <select
+              value={playerSelectValue}
+              onChange={(event) => handleSelectConfirmedPlayer(event.target.value)}
+              disabled={isLoading}
+              className="mt-1 h-10 w-full rounded-lg border border-[#244357] bg-[#0b1a25] px-3 text-sm text-slate-100 outline-none transition focus:border-[#ff5e00]"
+            >
+              <option value="">Selecione um jogador</option>
+              {jogadores.map((jogador) => {
+                const disabled = confirmedPlayerIds.includes(jogador.id);
+                return (
+                  <option key={jogador.id} value={jogador.id} disabled={disabled}>
+                    {jogador.nome}
+                  </option>
+                );
+              })}
+            </select>
+          </label>
 
           <div className="mt-4 flex flex-wrap gap-2">
             <button
