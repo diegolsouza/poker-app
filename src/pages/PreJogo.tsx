@@ -143,6 +143,7 @@ export default function PreJogo() {
   const [etapaId, setEtapaId] = useState('');
   const [rows, setRows] = useState<string[]>(['']);
   const [playerSelectValue, setPlayerSelectValue] = useState('');
+  const [canResortAfterNewPlayer, setCanResortAfterNewPlayer] = useState(false);
   const [sorteio, setSorteio] = useState<SorteioMesas>({ tables: [], drawnAt: null });
   const [latePlayerId, setLatePlayerId] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -204,6 +205,7 @@ export default function PreJogo() {
       if (!persistedRaw) {
         setRows(['']);
         setPlayerSelectValue('');
+        setCanResortAfterNewPlayer(false);
         setLatePlayerId('');
         setSorteio({ tables: [], drawnAt: null });
         return;
@@ -215,6 +217,7 @@ export default function PreJogo() {
 
         setRows(normalized.participantIds.length > 0 ? normalizeSelectionRows(normalized.participantIds.map(String)) : ['']);
         setPlayerSelectValue('');
+        setCanResortAfterNewPlayer(false);
         setLatePlayerId('');
         setSorteio({
           tables: normalized.tables,
@@ -226,6 +229,7 @@ export default function PreJogo() {
         localStorage.removeItem(storageKey);
         setRows(['']);
         setPlayerSelectValue('');
+        setCanResortAfterNewPlayer(false);
         setLatePlayerId('');
         setSorteio({ tables: [], drawnAt: null });
       }
@@ -234,6 +238,7 @@ export default function PreJogo() {
     if (!etapaId) {
       setRows(['']);
       setPlayerSelectValue('');
+      setCanResortAfterNewPlayer(false);
       setLatePlayerId('');
       setSorteio({ tables: [], drawnAt: null });
       return;
@@ -284,6 +289,7 @@ export default function PreJogo() {
       });
 
       setRows(normalized.participantIds.length > 0 ? normalizeSelectionRows(normalized.participantIds.map(String)) : ['']);
+      setCanResortAfterNewPlayer(false);
       setLatePlayerId('');
       setSorteio({
         tables: normalized.tables,
@@ -369,15 +375,17 @@ export default function PreJogo() {
   }, [confirmedPlayerIds, etapaId, sorteio]);
 
   const addConfirmedPlayerToRows = (playerId: number) => {
+    const playerIdText = String(playerId);
+    if (confirmedPlayerIds.includes(playerId)) {
+      return;
+    }
+
     setRows((prev) => {
       const filled = prev.filter((item) => item.trim() !== '');
-      const playerIdText = String(playerId);
-      if (filled.includes(playerIdText)) {
-        return normalizeSelectionRows(prev);
-      }
-
       return normalizeSelectionRows([...filled, playerIdText]);
     });
+
+    setCanResortAfterNewPlayer(true);
   };
 
   const handleSelectConfirmedPlayer = (value: string) => {
@@ -430,6 +438,7 @@ export default function PreJogo() {
       tables,
       drawnAt: new Date().toISOString(),
     });
+    setCanResortAfterNewPlayer(false);
 
     setSuccess(`Sorteio concluído: ${confirmedPlayerIds.length} jogador(es) em ${tables.length} mesa(s).`);
   };
@@ -444,6 +453,7 @@ export default function PreJogo() {
 
     setRows(['']);
     setPlayerSelectValue('');
+    setCanResortAfterNewPlayer(false);
     setLatePlayerId('');
     setSorteio({ tables: [], drawnAt: null });
     setError(null);
@@ -733,6 +743,28 @@ export default function PreJogo() {
       return;
     }
 
+    const sourceTableIndex = sorteio.tables.findIndex((table) => table.includes(playerId));
+    const sourceTableSizeAfterRemoval =
+      sourceTableIndex >= 0 ? sorteio.tables[sourceTableIndex].filter((id) => id !== playerId).length : null;
+    const otherTables = sorteio.tables.filter((_, tableIndex) => tableIndex !== sourceTableIndex);
+    const hasLargeImbalanceAfterRemoval =
+      sourceTableSizeAfterRemoval !== null &&
+      otherTables.length > 0 &&
+      otherTables.every((table) => table.length - sourceTableSizeAfterRemoval >= 2);
+
+    if (hasLargeImbalanceAfterRemoval) {
+      const shouldRedraw = window.confirm(
+        'A mesa desse jogador ficou com pelo menos 2 jogadores a menos que as outras. Deseja realizar um novo sorteio?',
+      );
+
+      if (shouldRedraw) {
+        const redrawnTables = drawTables(nextPlayers);
+        setSorteio({ tables: redrawnTables, drawnAt: new Date().toISOString() });
+        setSuccess('Jogador removido. Novo sorteio realizado após confirmação.');
+        return;
+      }
+    }
+
     const updatedTables = sorteio.tables
       .map((table) => table.filter((id) => id !== playerId))
       .filter((table) => table.length > 0);
@@ -879,7 +911,7 @@ export default function PreJogo() {
             <button
               type="button"
               onClick={handleSortear}
-              disabled={isLoading || confirmedPlayerIds.length === 0}
+              disabled={isLoading || confirmedPlayerIds.length === 0 || (!!sorteio.drawnAt && !canResortAfterNewPlayer)}
               className="inline-flex h-10 items-center justify-center rounded-lg bg-[#ff5e00] px-4 text-sm font-semibold text-white transition hover:bg-[#ff7a2f] disabled:cursor-not-allowed disabled:opacity-60"
             >
               Sortear
