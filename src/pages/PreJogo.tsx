@@ -723,7 +723,7 @@ export default function PreJogo() {
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(255,94,0,0.08),transparent_24%),linear-gradient(180deg,#061019_0%,#07131d_40%,#081723_100%)] px-4 py-8 sm:px-6 lg:px-8">
-      <section className="mx-auto w-full max-w-7xl space-y-6">
+      <section className="mx-auto w-full max-w-[1700px] space-y-6">
         <header className="rounded-3xl border border-[#244357] bg-[#081723]/92 p-5 shadow-[0_18px_45px_rgba(3,8,14,0.42)]">
           <h1 className="text-2xl font-bold text-slate-50">Pré-jogo</h1>
           <p className="mt-1 text-sm text-slate-300">

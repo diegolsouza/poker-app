@@ -106,7 +106,7 @@ export default function Regras() {
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(255,94,0,0.08),transparent_24%),linear-gradient(180deg,#061019_0%,#07131d_40%,#081723_100%)] px-4 py-8 sm:px-6 lg:px-8">
-      <section className="mx-auto w-full max-w-6xl space-y-6">
+      <section className="mx-auto w-full max-w-[1700px] space-y-6">
         <header className="rounded-3xl border border-[#244357] bg-[#081723]/92 p-6 shadow-[0_18px_45px_rgba(3,8,14,0.42)]">
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff8d4d]">Regras</p>
           <h1 className="mt-2 text-3xl font-bold text-slate-100">Regras do Torneio e Operacionais</h1>

@@ -1036,7 +1036,7 @@ export default function RegistroResultados() {
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(255,94,0,0.08),transparent_24%),linear-gradient(180deg,#061019_0%,#07131d_40%,#081723_100%)] py-10 px-4 sm:px-6 lg:px-8">
-      <section className="mx-auto w-full max-w-[1500px] rounded-3xl border border-[#244357] bg-[#081723]/92 p-6 shadow-[0_18px_45px_rgba(3,8,14,0.42)] sm:p-8">
+      <section className="mx-auto w-full max-w-[1700px] rounded-3xl border border-[#244357] bg-[#081723]/92 p-6 shadow-[0_18px_45px_rgba(3,8,14,0.42)] sm:p-8">
         <header className="mb-6 flex flex-col gap-4 rounded-2xl border border-[#244357] bg-[#0c1f2c] px-5 py-4 shadow-[0_8px_22px_rgba(1,4,8,0.28)] lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-slate-50">Registro de Resultados de Etapas</h1>

@@ -191,7 +191,7 @@ export default function Configuracoes() {
 
   return (
     <main className="min-h-[calc(100vh-120px)] bg-[radial-gradient(circle_at_top,rgba(255,94,0,0.08),transparent_24%),linear-gradient(180deg,#061019_0%,#07131d_40%,#081723_100%)] px-4 py-8 sm:px-6 lg:px-8">
-      <section className="mx-auto w-full max-w-2xl rounded-3xl border border-[#244357] bg-[#081723]/92 p-6 shadow-[0_18px_45px_rgba(3,8,14,0.42)] sm:p-8">
+      <section className="mx-auto w-full max-w-[1400px] rounded-3xl border border-[#244357] bg-[#081723]/92 p-6 shadow-[0_18px_45px_rgba(3,8,14,0.42)] sm:p-8">
         <header className="mb-6 rounded-2xl border border-[#244357] bg-[#0c1f2c] px-5 py-4 shadow-[0_8px_22px_rgba(1,4,8,0.28)]">
           <h1 className="text-2xl font-bold text-slate-50">Configurações do Torneio</h1>
           <p className="mt-1 text-sm text-slate-300">

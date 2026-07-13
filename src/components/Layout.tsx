@@ -46,7 +46,7 @@ export default function Layout() {
           <div className="h-full w-full bg-[linear-gradient(115deg,transparent_0%,transparent_37%,rgba(255,94,0,0.09)_50%,transparent_63%,transparent_100%)]" />
         </div>
 
-        <div className="relative mx-auto w-full max-w-7xl px-4 py-3 sm:px-6 lg:px-8">
+        <div className="relative mx-auto w-full max-w-[1700px] px-4 py-3 sm:px-6 lg:px-10">
           <div className="flex items-center justify-between gap-3 lg:hidden">
             <img
               src={logo}
@@ -214,7 +214,7 @@ export default function Layout() {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      <main className="mx-auto w-full max-w-[1700px] px-4 py-6 sm:px-6 lg:px-10">
         <Outlet />
       </main>
     </div>
