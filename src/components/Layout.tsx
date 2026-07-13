@@ -22,6 +22,9 @@ export default function Layout() {
   const navigate = useNavigate();
   const adminLoggedIn = isAdminAuthenticated();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const visibleCommonNavItems = adminLoggedIn
+    ? commonNavItems.filter((item) => item.to !== '/' && item.to !== '/financeiro' && item.to !== '/premiacao-final')
+    : commonNavItems;
 
   // Accessing pathname makes this component re-evaluate auth on route changes.
   void location.pathname;
@@ -76,7 +79,7 @@ export default function Layout() {
             </div>
 
             <nav aria-label="Navegação principal" className="flex flex-wrap items-center gap-2 rounded-full border border-[#2d4659]/70 bg-[#0d2431]/82 p-1 shadow-[0_10px_28px_rgba(1,4,8,0.45)]">
-              {commonNavItems.map((item) => (
+              {visibleCommonNavItems.map((item) => (
                 <NavLink
                   key={item.to}
                   to={item.to}
@@ -145,7 +148,7 @@ export default function Layout() {
               aria-label="Navegação principal mobile"
               className="mt-3 grid gap-2 rounded-2xl border border-[#2d4659]/70 bg-[#0d2431]/90 p-2 lg:hidden"
             >
-              {commonNavItems.map((item) => (
+              {visibleCommonNavItems.map((item) => (
                 <NavLink
                   key={item.to}
                   to={item.to}
