@@ -61,6 +61,18 @@ type NameMatchResult = {
   strategy: 'exact' | 'contains' | 'fuzzy' | 'none';
 };
 
+type OcrDebugInfo = {
+  sourceName: string;
+  sourceSizeKb: number;
+  processingMs: number;
+  confidence: number;
+  wordsCount: number;
+  totalNonEmptyLines: number;
+  parsedCandidateLines: number;
+  matchedPlayers: number;
+  unmatchedPlayers: number;
+};
+
 function normalizeText(value: string): string {
   return value
     .normalize('NFD')
@@ -302,6 +314,7 @@ export default function RegistroResultados() {
   const [success, setSuccess] = useState<string | null>(null);
   const [ocrRawText, setOcrRawText] = useState('');
   const [ocrError, setOcrError] = useState<string | null>(null);
+  const [ocrDebugInfo, setOcrDebugInfo] = useState<OcrDebugInfo | null>(null);
   const [importPreviewRows, setImportPreviewRows] = useState<RegistroFormRow[]>([]);
   const [importWarnings, setImportWarnings] = useState<string[]>([]);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -472,6 +485,7 @@ export default function RegistroResultados() {
     setImportPreviewRows([]);
     setImportWarnings([]);
     setOcrError(null);
+    setOcrDebugInfo(null);
     setSuccess('Modelo OCR carregado no campo de texto.');
   };
 
@@ -480,6 +494,7 @@ export default function RegistroResultados() {
     setCameraError(null);
     setSuccess(null);
     setIsOcrLoading(true);
+    const startedAt = performance.now();
 
     try {
       const tesseractModule = await import('tesseract.js');
@@ -487,7 +502,34 @@ export default function RegistroResultados() {
 
       try {
         const result = await worker.recognize(source);
-        setOcrRawText(result.data.text ?? '');
+        const rawText = result.data.text ?? '';
+        setOcrRawText(rawText);
+
+        const sourceName = source instanceof File ? source.name : 'captura-camera.jpg';
+        const sourceSizeKb = Math.round((source.size / 1024) * 10) / 10;
+        const processingMs = Math.round(performance.now() - startedAt);
+        const wordsCount = rawText
+          .split(/\s+/)
+          .map((token) => token.trim())
+          .filter((token) => token.length > 0).length;
+        const confidence = Math.round((result.data.confidence ?? 0) * 10) / 10;
+        const totalNonEmptyLines = rawText
+          .split('\n')
+          .map((line) => line.trim())
+          .filter((line) => line.length > 0).length;
+
+        setOcrDebugInfo({
+          sourceName,
+          sourceSizeKb,
+          processingMs,
+          confidence,
+          wordsCount,
+          totalNonEmptyLines,
+          parsedCandidateLines: 0,
+          matchedPlayers: 0,
+          unmatchedPlayers: 0,
+        });
+
         setSuccess(successMessage);
       } finally {
         await worker.terminate();
@@ -779,13 +821,50 @@ export default function RegistroResultados() {
       setOcrError('Cole ou capture um texto antes de analisar.');
       setImportPreviewRows([]);
       setImportWarnings([]);
+      setOcrDebugInfo((prev) =>
+        prev
+          ? {
+              ...prev,
+              totalNonEmptyLines: 0,
+              parsedCandidateLines: 0,
+              matchedPlayers: 0,
+              unmatchedPlayers: 0,
+            }
+          : null,
+      );
       return;
     }
 
-    const parsedRows = ocrRawText
+    const nonEmptyLines = ocrRawText
       .split('\n')
-      .map(parseParticipantLine)
-      .filter((item): item is ParsedImportRow => item !== null);
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+
+    const parsedRows = nonEmptyLines.map(parseParticipantLine).filter((item): item is ParsedImportRow => item !== null);
+
+    const unmatchedPlayers = parsedRows.filter((item) => !findJogadorFromName(item.nome).jogadorId).length;
+
+    setOcrDebugInfo((prev) =>
+      prev
+        ? {
+            ...prev,
+            totalNonEmptyLines: nonEmptyLines.length,
+            parsedCandidateLines: parsedRows.length,
+            matchedPlayers: parsedRows.length - unmatchedPlayers,
+            unmatchedPlayers,
+          }
+        : {
+            sourceName: 'texto-manual',
+            sourceSizeKb: 0,
+            processingMs: 0,
+            confidence: 0,
+            wordsCount: 0,
+            totalNonEmptyLines: nonEmptyLines.length,
+            parsedCandidateLines: parsedRows.length,
+            matchedPlayers: parsedRows.length - unmatchedPlayers,
+            unmatchedPlayers,
+          },
+    );
 
     if (parsedRows.length === 0) {
       setOcrError('Não consegui identificar linhas de participantes. Ajuste o texto e tente novamente.');
@@ -1094,6 +1173,22 @@ export default function RegistroResultados() {
                 ) : null}
               </div>
             </div>
+
+            {ocrDebugInfo ? (
+              <details className="mt-3 rounded-lg border border-[#244357] bg-[#081723] p-3 text-xs text-slate-300">
+                <summary className="cursor-pointer font-semibold text-[#ffb387]">Debug OCR</summary>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                  <p>Arquivo: {ocrDebugInfo.sourceName}</p>
+                  <p>Tamanho: {ocrDebugInfo.sourceSizeKb.toLocaleString('pt-BR')} KB</p>
+                  <p>Tempo OCR: {ocrDebugInfo.processingMs.toLocaleString('pt-BR')} ms</p>
+                  <p>Confiança OCR: {ocrDebugInfo.confidence.toLocaleString('pt-BR')}%</p>
+                  <p>Palavras reconhecidas: {ocrDebugInfo.wordsCount.toLocaleString('pt-BR')}</p>
+                  <p>Linhas não vazias: {ocrDebugInfo.totalNonEmptyLines.toLocaleString('pt-BR')}</p>
+                  <p>Linhas candidatas: {ocrDebugInfo.parsedCandidateLines.toLocaleString('pt-BR')}</p>
+                  <p>Nomes sem match: {ocrDebugInfo.unmatchedPlayers.toLocaleString('pt-BR')}</p>
+                </div>
+              </details>
+            ) : null}
 
             {ocrError ? <p className="mt-3 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">{ocrError}</p> : null}
           </div>
