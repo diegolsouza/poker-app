@@ -7,6 +7,10 @@ type Temporada = {
   codigo_temporada: string;
 };
 
+type EtapaCodigoRow = {
+  codigo_etapa: string;
+};
+
 type StatusMessage = {
   type: 'success' | 'error';
   text: string;
@@ -119,7 +123,7 @@ export default function CadastroBasico() {
         return;
       }
 
-      const codigosExistentes = (data ?? []).map((item) => item.codigo_etapa as string);
+      const codigosExistentes = ((data ?? []) as EtapaCodigoRow[]).map((item) => item.codigo_etapa);
       const codigoSugerido = getNextEtapaCode(temporadaSelecionada.codigo_temporada, codigosExistentes);
 
       setCodigoEtapa(codigoSugerido);
@@ -248,7 +252,7 @@ export default function CadastroBasico() {
         .select('codigo_etapa')
         .eq('temporada_id', Number(temporadaId));
 
-      const codigosExistentes = (etapasDaTemporada ?? []).map((item) => item.codigo_etapa as string);
+      const codigosExistentes = ((etapasDaTemporada ?? []) as EtapaCodigoRow[]).map((item) => item.codigo_etapa);
       const proximoCodigo = getNextEtapaCode(temporadaSelecionada.codigo_temporada, codigosExistentes);
       setCodigoEtapa(proximoCodigo);
     } else {

@@ -20,6 +20,11 @@ type Jogador = {
   nome: string;
 };
 
+type EtapaResumo = {
+  id: number;
+  data_etapa: string;
+};
+
 type RegistroEtapa = {
   etapa_id: number;
   jogador_id: number;
@@ -260,7 +265,8 @@ export default function RankingGeral() {
         return;
       }
 
-      const etapaIds = (etapasData ?? []).map((etapa) => etapa.id);
+      const etapaRows = (etapasData ?? []) as EtapaResumo[];
+      const etapaIds = etapaRows.map((etapa) => etapa.id);
       setEtapaIdsOrdenados(etapaIds);
 
       if (etapaIds.length === 0) {
