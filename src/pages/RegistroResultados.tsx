@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import type { FormEvent } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import type { ChangeEvent, FormEvent } from 'react';
 import supabase from '../supabaseClient';
 
 type TipoRegistro = 'jogador' | 'visitante';
@@ -33,6 +33,141 @@ type RegistroFormRow = {
   pagouJanta: string;
   outrosCustos: string;
 };
+
+type ParsedImportRow = {
+  nome: string;
+  tipo?: TipoRegistro;
+  colocacao?: number;
+  rebuys?: number;
+  fezAddon?: boolean;
+  jantou?: boolean;
+  cozinheiro?: boolean;
+  melhorMao?: boolean;
+  pagouSalao?: boolean;
+  pagouJanta?: number;
+  outrosCustos?: number;
+};
+
+type ImportPreview = {
+  rows: RegistroFormRow[];
+  warnings: string[];
+  encontrados: number;
+};
+
+function normalizeText(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function parseBooleanValue(value: string): boolean | undefined {
+  const token = normalizeText(value);
+  if (!token) return undefined;
+
+  if (['sim', 's', 'true', 'ok', 'x', '1'].includes(token)) {
+    return true;
+  }
+
+  if (['nao', 'n', 'false', '0'].includes(token)) {
+    return false;
+  }
+
+  return undefined;
+}
+
+function parseMoneyValue(value: string): number | undefined {
+  const cleaned = value.replace(/[^\d,.-]/g, '').trim();
+  if (!cleaned) return undefined;
+
+  const parsed = Number.parseFloat(cleaned.replace(/\./g, '').replace(',', '.'));
+  if (Number.isNaN(parsed)) return undefined;
+
+  return parsed;
+}
+
+function parseParticipantLine(line: string): ParsedImportRow | null {
+  const sanitized = line
+    .replace(/[|]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!sanitized || sanitized.length < 3) {
+    return null;
+  }
+
+  const lowered = normalizeText(sanitized);
+  const hasHint = /(rebuy|add on|addon|jant|chef|cozinh|melhor|salao|coloc|posicao|visitante|jogador|outros)/.test(lowered);
+  if (!hasHint) {
+    return null;
+  }
+
+  const nameCandidate = sanitized.split(/[-;:,]/)[0]?.trim() ?? '';
+  if (!nameCandidate || /(rebuy|add on|addon|jant|chef|cozinh|melhor|salao|coloc|posicao|visitante|jogador)/i.test(nameCandidate)) {
+    return null;
+  }
+
+  const row: ParsedImportRow = { nome: nameCandidate };
+
+  const tipoMatch = sanitized.match(/\b(visitante|jogador)\b/i);
+  if (tipoMatch) {
+    row.tipo = normalizeText(tipoMatch[1]) === 'visitante' ? 'visitante' : 'jogador';
+  }
+
+  const colocacaoMatch = sanitized.match(/(?:coloc(?:acao)?|pos(?:icao)?|lugar)\s*[:=]?\s*(10\+?|[1-9])\b/i);
+  const ordinalMatch = sanitized.match(/\b(10\+?|[1-9])\s*º/i);
+  const colocacaoValue = colocacaoMatch?.[1] ?? ordinalMatch?.[1];
+  if (colocacaoValue) {
+    row.colocacao = colocacaoValue.startsWith('10') ? 10 : Number.parseInt(colocacaoValue, 10);
+  }
+
+  const rebuysTimesMatch = sanitized.match(/(\d+)\s*x\s*rebuys?/i);
+  const rebuysDirectMatch = sanitized.match(/rebuys?\s*[:=]?\s*(\d+)/i);
+  const rebuysValue = rebuysTimesMatch?.[1] ?? rebuysDirectMatch?.[1];
+  if (rebuysValue) {
+    row.rebuys = Number.parseInt(rebuysValue, 10);
+  }
+
+  const addonMatch = sanitized.match(/(?:add\s*on|addon)\s*[:=]?\s*(sim|nao|não|s|n|1|0|x|ok|true|false)?/i);
+  if (addonMatch) {
+    row.fezAddon = addonMatch[1] ? parseBooleanValue(addonMatch[1]) ?? true : true;
+  }
+
+  const jantouMatch = sanitized.match(/jantou\s*[:=]?\s*(sim|nao|não|s|n|1|0|x|ok|true|false)/i);
+  if (jantouMatch) {
+    row.jantou = parseBooleanValue(jantouMatch[1]);
+  }
+
+  const cozinheiroMatch = sanitized.match(/(?:cozinheiro|chef)\s*[:=]?\s*(sim|nao|não|s|n|1|0|x|ok|true|false)/i);
+  if (cozinheiroMatch) {
+    row.cozinheiro = parseBooleanValue(cozinheiroMatch[1]);
+  }
+
+  const melhorMaoMatch = sanitized.match(/(?:melhor\s*mao|m\.?\s*mao)\s*[:=]?\s*(sim|nao|não|s|n|1|0|x|ok|true|false)/i);
+  if (melhorMaoMatch) {
+    row.melhorMao = parseBooleanValue(melhorMaoMatch[1]);
+  }
+
+  const salaoMatch = sanitized.match(/(?:pagou\s*salao|salao\s*pagador|salao)\s*[:=]?\s*(sim|nao|não|s|n|1|0|x|ok|true|false)/i);
+  if (salaoMatch) {
+    row.pagouSalao = parseBooleanValue(salaoMatch[1]);
+  }
+
+  const pagouJantaMatch = sanitized.match(/(?:pagou\s*janta|janta\s*\(pagou\)|pagou_janta)\s*[:=]?\s*([\d.,]+)/i);
+  if (pagouJantaMatch) {
+    row.pagouJanta = parseMoneyValue(pagouJantaMatch[1]);
+  }
+
+  const outrosMatch = sanitized.match(/(?:outros|outros\s*custos?)\s*[:=]?\s*([\d.,]+)/i);
+  if (outrosMatch) {
+    row.outrosCustos = parseMoneyValue(outrosMatch[1]);
+  }
+
+  return row;
+}
 
 function parseIntOrNull(value: string): number | null {
   const trimmed = value.trim();
@@ -90,8 +225,13 @@ export default function RegistroResultados() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isOcrLoading, setIsOcrLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [ocrRawText, setOcrRawText] = useState('');
+  const [ocrError, setOcrError] = useState<string | null>(null);
+  const [importPreviewRows, setImportPreviewRows] = useState<RegistroFormRow[]>([]);
+  const [importWarnings, setImportWarnings] = useState<string[]>([]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -136,6 +276,151 @@ export default function RegistroResultados() {
 
   const resetForm = () => {
     setRows([createEmptyRow()]);
+  };
+
+  const jogadoresPorNome = useMemo(() => {
+    return jogadores.map((jogador) => ({
+      id: String(jogador.id),
+      nome: jogador.nome,
+      normalized: normalizeText(jogador.nome),
+    }));
+  }, [jogadores]);
+
+  const findJogadorIdFromName = (nome: string): string | null => {
+    const normalized = normalizeText(nome);
+    if (!normalized) return null;
+
+    const exactMatch = jogadoresPorNome.find((item) => item.normalized === normalized);
+    if (exactMatch) return exactMatch.id;
+
+    const includesMatch = jogadoresPorNome.filter(
+      (item) => item.normalized.includes(normalized) || normalized.includes(item.normalized),
+    );
+
+    if (includesMatch.length === 1) {
+      return includesMatch[0].id;
+    }
+
+    return null;
+  };
+
+  const buildImportPreview = (parsedRows: ParsedImportRow[]): ImportPreview => {
+    const warnings: string[] = [];
+    let pagadorSalaoDetectado = false;
+
+    const previewRows: RegistroFormRow[] = parsedRows.flatMap((parsed) => {
+      const jogadorId = findJogadorIdFromName(parsed.nome);
+      if (!jogadorId) {
+        warnings.push(`Jogador não encontrado automaticamente: ${parsed.nome}`);
+        return [];
+      }
+
+      const isPagadorSalao = parsed.pagouSalao === true && !pagadorSalaoDetectado;
+      if (parsed.pagouSalao === true) {
+        pagadorSalaoDetectado = true;
+      }
+
+      return [
+        {
+          id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          jogadorId,
+          tipo: parsed.tipo ?? 'jogador',
+          cozinheiro: parsed.cozinheiro ?? false,
+          jantou: parsed.cozinheiro ? false : (parsed.jantou ?? false),
+          melhorMao: parsed.melhorMao ?? false,
+          colocacao: parsed.tipo === 'visitante' ? '' : parsed.colocacao ? String(parsed.colocacao) : '',
+          rebuys: String(parsed.rebuys ?? 0),
+          fezAddon: parsed.fezAddon ?? false,
+          pagouSalao: isPagadorSalao,
+          pagouJanta: parsed.pagouJanta !== undefined ? String(parsed.pagouJanta).replace('.', ',') : '',
+          outrosCustos: parsed.outrosCustos !== undefined ? String(parsed.outrosCustos).replace('.', ',') : '',
+        },
+      ];
+    });
+
+    if (parsedRows.some((row) => row.pagouSalao) && !previewRows.some((row) => row.pagouSalao)) {
+      warnings.push('Foi detectado pagador do salão, mas não foi possível associar o nome automaticamente.');
+    }
+
+    return {
+      rows: previewRows,
+      warnings,
+      encontrados: previewRows.length,
+    };
+  };
+
+  const handleImageCaptureForImport = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    setOcrError(null);
+    setSuccess(null);
+    setIsOcrLoading(true);
+
+    try {
+      const tesseractModule = await import('tesseract.js');
+      const worker = await tesseractModule.createWorker('por');
+
+      try {
+        const result = await worker.recognize(file);
+        setOcrRawText(result.data.text ?? '');
+        setSuccess('Imagem lida. Revise o texto reconhecido e clique em "Analisar texto".');
+      } finally {
+        await worker.terminate();
+      }
+    } catch {
+      setOcrError('Não foi possível processar a imagem. Tente uma foto mais nítida e com boa iluminação.');
+    } finally {
+      setIsOcrLoading(false);
+      event.target.value = '';
+    }
+  };
+
+  const handleAnalyzeImportText = () => {
+    setOcrError(null);
+    setSuccess(null);
+
+    if (!ocrRawText.trim()) {
+      setOcrError('Cole ou capture um texto antes de analisar.');
+      setImportPreviewRows([]);
+      setImportWarnings([]);
+      return;
+    }
+
+    const parsedRows = ocrRawText
+      .split('\n')
+      .map(parseParticipantLine)
+      .filter((item): item is ParsedImportRow => item !== null);
+
+    if (parsedRows.length === 0) {
+      setOcrError('Não consegui identificar linhas de participantes. Ajuste o texto e tente novamente.');
+      setImportPreviewRows([]);
+      setImportWarnings([]);
+      return;
+    }
+
+    const preview = buildImportPreview(parsedRows);
+    setImportPreviewRows(preview.rows);
+    setImportWarnings(preview.warnings);
+
+    if (preview.encontrados === 0) {
+      setOcrError('Nenhum participante foi associado automaticamente. Revise os nomes no texto.');
+      return;
+    }
+
+    setSuccess(`Importação pronta: ${preview.encontrados} participante(s) reconhecido(s).`);
+  };
+
+  const handleApplyImport = () => {
+    if (importPreviewRows.length === 0) {
+      setOcrError('Faça a análise do texto antes de aplicar.');
+      return;
+    }
+
+    setRows(ensureTrailingEmptyRow(importPreviewRows));
+    setSuccess(`Dados aplicados ao formulário: ${importPreviewRows.length} participante(s). Revise e salve.`);
   };
 
   const updateRow = (rowId: string, updater: (row: RegistroFormRow) => RegistroFormRow) => {
@@ -306,6 +591,88 @@ export default function RegistroResultados() {
         </header>
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="rounded-2xl border border-[#244357] bg-[#0b1a25] p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-100">Importar por foto (OCR)</h2>
+                <p className="text-xs text-slate-300">
+                  Tire uma foto do papel no celular e pré-carregue os dados automaticamente para revisão.
+                </p>
+              </div>
+
+              <label className="inline-flex cursor-pointer items-center justify-center rounded-lg border border-[#315770] bg-[#102536] px-3 py-2 text-xs font-semibold text-slate-200 transition hover:border-[#ff9a63] hover:text-[#ffcfb2]">
+                {isOcrLoading ? 'Lendo imagem...' : 'Abrir câmera/arquivo'}
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={handleImageCaptureForImport}
+                  disabled={isDisabled || isOcrLoading}
+                />
+              </label>
+            </div>
+
+            <div className="mt-3 grid gap-3 lg:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-300">Texto reconhecido</label>
+                <textarea
+                  value={ocrRawText}
+                  onChange={(event) => setOcrRawText(event.target.value)}
+                  disabled={isDisabled || isOcrLoading}
+                  className="h-44 w-full rounded-lg border border-[#244357] bg-[#081723] px-3 py-2 text-xs text-slate-100 outline-none transition focus:border-[#ff5e00]"
+                  placeholder="Exemplo por linha: João - jogador - colocacao 2 - rebuys 1 - addon sim - jantou sim - pagou salao sim"
+                />
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={handleAnalyzeImportText}
+                    disabled={isDisabled || isOcrLoading}
+                    className="inline-flex h-9 items-center justify-center rounded-lg border border-[#315770] bg-[#102536] px-3 text-xs font-semibold text-slate-200 transition hover:border-[#ff9a63] hover:text-[#ffcfb2] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Analisar texto
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleApplyImport}
+                    disabled={isDisabled || importPreviewRows.length === 0}
+                    className="inline-flex h-9 items-center justify-center rounded-lg bg-[#ff5e00] px-3 text-xs font-semibold text-white transition hover:bg-[#ff7a2f] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Aplicar no formulário
+                  </button>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-[#244357] bg-[#081723] p-3">
+                <p className="text-xs font-semibold text-slate-200">Prévia da importação</p>
+                {importPreviewRows.length === 0 ? (
+                  <p className="mt-2 text-xs text-slate-400">Nenhum participante analisado ainda.</p>
+                ) : (
+                  <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto text-xs text-slate-300">
+                    {importPreviewRows.map((row) => {
+                      const nome = jogadores.find((jogador) => String(jogador.id) === row.jogadorId)?.nome ?? `ID ${row.jogadorId}`;
+                      return (
+                        <li key={row.id} className="rounded-md border border-[#2f5268] bg-[#102536] px-2 py-1">
+                          {nome} | {row.tipo} | {row.colocacao || '-'}º | Rb {row.rebuys} | Add-on {row.fezAddon ? 'sim' : 'não'}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+
+                {importWarnings.length > 0 ? (
+                  <ul className="mt-3 space-y-1 text-xs text-amber-300">
+                    {importWarnings.map((warning) => (
+                      <li key={warning}>• {warning}</li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            </div>
+
+            {ocrError ? <p className="mt-3 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">{ocrError}</p> : null}
+          </div>
+
           <div className="rounded-2xl border border-[#244357] bg-[#0b1a25] p-4">
             <div className="mb-3 flex items-center justify-between gap-4">
               <p className="text-sm text-slate-300">Preencha uma linha por participante. Ao selecionar um nome, uma nova linha vazia é criada automaticamente abaixo.</p>
