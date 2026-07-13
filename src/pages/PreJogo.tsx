@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import html2canvas from 'html2canvas';
 import supabase from '../supabaseClient';
+import { isAdminAuthenticated } from '../utils/adminAuth';
 
 type Etapa = {
   id: number;
@@ -150,10 +150,10 @@ export default function PreJogo() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [syncWarning, setSyncWarning] = useState<string | null>(null);
-  const [isExporting, setIsExporting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const mesasExportRef = useRef<HTMLDivElement | null>(null);
   const isRemoteTableAvailableRef = useRef<boolean>(true);
+  const adminLoggedIn = isAdminAuthenticated();
 
   useEffect(() => {
     const loadData = async () => {
@@ -468,19 +468,6 @@ export default function PreJogo() {
     return `${etapa.codigo_etapa}-${data}`.replace(/\//g, '-');
   }, [etapaId, etapas]);
 
-  const captureMesasCanvas = async () => {
-    if (!mesasExportRef.current) {
-      throw new Error('Área das mesas não encontrada para exportação.');
-    }
-
-    return html2canvas(mesasExportRef.current, {
-      backgroundColor: '#07131d',
-      scale: 2,
-      useCORS: true,
-      logging: false,
-    });
-  };
-
   const openPrintWindow = (title: string, htmlBody: string, style: string) => {
     const printFrame = document.createElement('iframe');
     printFrame.style.position = 'fixed';
@@ -516,107 +503,6 @@ export default function PreJogo() {
         document.body.removeChild(printFrame);
       }, 1500);
     }, 200);
-  };
-
-  const downloadBlob = (blob: Blob, fileName: string) => {
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
-  };
-
-  const handleExportarImagem = async () => {
-    setError(null);
-    setSuccess(null);
-
-    if (sorteio.tables.length === 0) {
-      setError('Faça o sorteio antes de exportar.');
-      return;
-    }
-
-    setIsExporting(true);
-
-    try {
-      const canvas = await captureMesasCanvas();
-      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob((generatedBlob) => resolve(generatedBlob), 'image/png'));
-
-      if (!blob) {
-        throw new Error('Falha ao gerar imagem');
-      }
-
-      const fileName = `pre-jogo-${etapaSelecionadaLabel}.png`;
-      const file = new File([blob], fileName, { type: 'image/png' });
-
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: `Pré-jogo ${etapaSelecionadaLabel}`,
-        });
-      } else {
-        downloadBlob(blob, fileName);
-      }
-
-      setSuccess('Imagem exportada com sucesso.');
-    } catch (exportError) {
-      const message = exportError instanceof Error ? exportError.message : 'Erro desconhecido';
-      setError(`Não foi possível exportar imagem das mesas: ${message}.`);
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
-  const handleExportarPdf = async () => {
-    setError(null);
-    setSuccess(null);
-
-    if (sorteio.tables.length === 0) {
-      setError('Faça o sorteio antes de exportar.');
-      return;
-    }
-
-    setIsExporting(true);
-
-    try {
-      const { default: JsPDF } = await import('jspdf');
-      const canvas = await captureMesasCanvas();
-      const imageData = canvas.toDataURL('image/png');
-      const pdf = new JsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4', compress: true });
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      const margin = 10;
-      const usableWidth = pageWidth - margin * 2;
-      const usableHeight = pageHeight - margin * 2 - 8;
-      const ratio = Math.min(usableWidth / canvas.width, usableHeight / canvas.height);
-      const imageWidth = canvas.width * ratio;
-      const imageHeight = canvas.height * ratio;
-      const imageX = (pageWidth - imageWidth) / 2;
-      const imageY = margin + 6;
-
-      pdf.setFontSize(12);
-      pdf.text(`Pré-jogo - ${etapaSelecionadaLabel}`, margin, margin);
-      pdf.addImage(imageData, 'PNG', imageX, imageY, imageWidth, imageHeight);
-
-      const blob = pdf.output('blob');
-      const fileName = `pre-jogo-${etapaSelecionadaLabel}.pdf`;
-      const file = new File([blob], fileName, { type: 'application/pdf' });
-
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: `Pré-jogo ${etapaSelecionadaLabel}` });
-      } else {
-        downloadBlob(blob, fileName);
-      }
-
-      setSuccess('PDF pronto para impressão/exportação.');
-    } catch (printError) {
-      const message = printError instanceof Error ? printError.message : 'Erro desconhecido';
-      setError(`Não foi possível abrir a exportação em PDF: ${message}.`);
-    } finally {
-      setIsExporting(false);
-    }
   };
 
   const handleImprimirFichaMesa = () => {
@@ -862,7 +748,8 @@ export default function PreJogo() {
           </label>
         </header>
 
-        <section className="rounded-3xl border border-[#244357] bg-[#081723]/92 p-5 shadow-[0_18px_45px_rgba(3,8,14,0.42)]">
+        {adminLoggedIn ? (
+          <section className="rounded-3xl border border-[#244357] bg-[#081723]/92 p-5 shadow-[0_18px_45px_rgba(3,8,14,0.42)]">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-lg font-semibold text-slate-50">Jogadores Confirmados</h2>
             <span className="rounded-full border border-[#315770] bg-[#102536] px-3 py-1 text-xs font-semibold text-slate-200">
@@ -925,9 +812,10 @@ export default function PreJogo() {
               Limpar pré-jogo
             </button>
           </div>
-        </section>
+          </section>
+        ) : null}
 
-        {sorteio.tables.length > 0 ? (
+        {adminLoggedIn && sorteio.tables.length > 0 ? (
           <section className="rounded-3xl border border-[#244357] bg-[#081723]/92 p-5 shadow-[0_18px_45px_rgba(3,8,14,0.42)]">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-lg font-semibold text-slate-50">Jogador Atrasado</h2>
@@ -978,24 +866,7 @@ export default function PreJogo() {
                 <span className="text-sm text-slate-300">{currentDrawPlayerIds.length} jogadores</span>
                 <button
                   type="button"
-                  onClick={handleExportarImagem}
-                  disabled={isExporting}
-                  className="inline-flex h-9 items-center justify-center rounded-lg border border-[#315770] bg-[#102536] px-3 text-xs font-semibold text-slate-200 transition hover:border-[#ff9a63] hover:text-[#ffcfb2] disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  Exportar imagem
-                </button>
-                <button
-                  type="button"
-                  onClick={handleExportarPdf}
-                  disabled={isExporting}
-                  className="inline-flex h-9 items-center justify-center rounded-lg border border-[#315770] bg-[#102536] px-3 text-xs font-semibold text-slate-200 transition hover:border-[#ff9a63] hover:text-[#ffcfb2] disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  Exportar PDF
-                </button>
-                <button
-                  type="button"
                   onClick={handleImprimirFichaMesa}
-                  disabled={isExporting}
                   className="inline-flex h-9 items-center justify-center rounded-lg border border-[#315770] bg-[#102536] px-3 text-xs font-semibold text-slate-200 transition hover:border-[#ff9a63] hover:text-[#ffcfb2] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Ficha por mesa

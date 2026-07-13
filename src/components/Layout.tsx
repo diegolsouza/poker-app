@@ -5,6 +5,7 @@ import { isAdminAuthenticated, logoutAdmin } from '../utils/adminAuth';
 
 const commonNavItems = [
   { label: 'Ranking', to: '/' },
+  { label: 'Pré-jogo', to: '/pre-jogo' },
   { label: 'Financeiro', to: '/financeiro' },
   { label: 'Premiação Final', to: '/premiacao-final' },
   { label: 'Regras', to: '/regras' },
@@ -12,7 +13,6 @@ const commonNavItems = [
 
 const adminNavItems = [
   { label: 'Cadastro', to: '/admin/cadastro-basico' },
-  { label: 'Pré-jogo', to: '/admin/pre-jogo' },
   { label: 'Resultados', to: '/admin/resultados' },
   { label: 'Configurações', to: '/admin/configuracoes' },
 ];

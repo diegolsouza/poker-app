@@ -18,9 +18,9 @@ function App() {
 				<Route path="/" element={<Layout />}>
 					<Route index element={<RankingGeral />} />
 					<Route path="admin/login" element={<AdminLogin />} />
+					<Route path="pre-jogo" element={<PreJogo />} />
 					<Route path="admin" element={<RequireAdminAuth />}>
 						<Route path="cadastro-basico" element={<CadastroBasico />} />
-						<Route path="pre-jogo" element={<PreJogo />} />
 						<Route path="resultados" element={<RegistroResultados />} />
 						<Route path="configuracoes" element={<Configuracoes />} />
 					</Route>
