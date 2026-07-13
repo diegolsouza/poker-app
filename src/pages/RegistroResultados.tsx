@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
 import supabase from '../supabaseClient';
 
@@ -296,16 +296,29 @@ export default function RegistroResultados() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isOcrLoading, setIsOcrLoading] = useState(false);
+  const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [ocrRawText, setOcrRawText] = useState('');
   const [ocrError, setOcrError] = useState<string | null>(null);
   const [importPreviewRows, setImportPreviewRows] = useState<RegistroFormRow[]>([]);
   const [importWarnings, setImportWarnings] = useState<string[]>([]);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const cameraStreamRef = useRef<MediaStream | null>(null);
+  const printFrameRef = useRef<HTMLIFrameElement | null>(null);
 
   const etapaSelecionada = useMemo(() => {
     return etapas.find((etapa) => String(etapa.id) === etapaId) ?? null;
   }, [etapaId, etapas]);
+
+  const stopCameraStream = () => {
+    cameraStreamRef.current?.getTracks().forEach((track) => track.stop());
+    cameraStreamRef.current = null;
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+  };
 
   useEffect(() => {
     const loadData = async () => {
@@ -462,6 +475,30 @@ export default function RegistroResultados() {
     setSuccess('Modelo OCR carregado no campo de texto.');
   };
 
+  const processImageForImport = async (source: Blob | File, successMessage: string) => {
+    setOcrError(null);
+    setCameraError(null);
+    setSuccess(null);
+    setIsOcrLoading(true);
+
+    try {
+      const tesseractModule = await import('tesseract.js');
+      const worker = await tesseractModule.createWorker('por');
+
+      try {
+        const result = await worker.recognize(source);
+        setOcrRawText(result.data.text ?? '');
+        setSuccess(successMessage);
+      } finally {
+        await worker.terminate();
+      }
+    } catch {
+      setOcrError('Não foi possível processar a imagem. Tente uma foto mais nítida e com boa iluminação.');
+    } finally {
+      setIsOcrLoading(false);
+    }
+  };
+
   const handlePrintOcrTemplate = () => {
     const etapaTitulo = etapaSelecionada
       ? `${etapaSelecionada.codigo_etapa} - ${new Date(etapaSelecionada.data_etapa).toLocaleDateString('pt-BR')}`
@@ -485,13 +522,13 @@ export default function RegistroResultados() {
       `;
     }).join('');
 
-    const popup = window.open('', '_blank', 'noopener,noreferrer,width=1200,height=900');
-    if (!popup) {
-      setOcrError('Não foi possível abrir a janela de impressão. Verifique o bloqueador de pop-up.');
+    const iframe = printFrameRef.current;
+    if (!iframe?.contentWindow || !iframe.contentDocument) {
+      setOcrError('Não foi possível preparar a impressão neste navegador.');
       return;
     }
 
-    popup.document.write(`
+    const html = `
       <html>
         <head>
           <title>Modelo OCR - Poker</title>
@@ -536,10 +573,16 @@ export default function RegistroResultados() {
           <p class="small">Depois da foto, use o formato textual padrão no sistema se quiser corrigir manualmente.</p>
         </body>
       </html>
-    `);
-    popup.document.close();
-    popup.focus();
-    popup.print();
+    `;
+
+    iframe.contentDocument.open();
+    iframe.contentDocument.write(html);
+    iframe.contentDocument.close();
+
+    window.setTimeout(() => {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+    }, 150);
   };
 
   const handleImageCaptureForImport = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -548,28 +591,114 @@ export default function RegistroResultados() {
       return;
     }
 
-    setOcrError(null);
-    setSuccess(null);
-    setIsOcrLoading(true);
-
-    try {
-      const tesseractModule = await import('tesseract.js');
-      const worker = await tesseractModule.createWorker('por');
-
-      try {
-        const result = await worker.recognize(file);
-        setOcrRawText(result.data.text ?? '');
-        setSuccess('Imagem lida. Revise o texto reconhecido e clique em "Analisar texto".');
-      } finally {
-        await worker.terminate();
-      }
-    } catch {
-      setOcrError('Não foi possível processar a imagem. Tente uma foto mais nítida e com boa iluminação.');
-    } finally {
-      setIsOcrLoading(false);
-      event.target.value = '';
-    }
+    await processImageForImport(file, 'Imagem lida. Revise o texto reconhecido e clique em "Analisar texto".');
+    event.target.value = '';
   };
+
+  const handleOpenCameraModal = () => {
+    setCameraError(null);
+    setOcrError(null);
+    setIsCameraModalOpen(true);
+  };
+
+  const handleCloseCameraModal = () => {
+    stopCameraStream();
+    setIsCameraModalOpen(false);
+  };
+
+  const handleCaptureCameraPhoto = async () => {
+    const video = videoRef.current;
+    if (!video || video.videoWidth === 0 || video.videoHeight === 0) {
+      setCameraError('A câmera ainda não ficou pronta. Aguarde um instante e tente novamente.');
+      return;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    const context = canvas.getContext('2d');
+    if (!context) {
+      setCameraError('Não foi possível capturar a imagem da câmera.');
+      return;
+    }
+
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob((generatedBlob) => resolve(generatedBlob), 'image/jpeg', 0.92);
+    });
+
+    if (!blob) {
+      setCameraError('Não foi possível gerar a foto capturada.');
+      return;
+    }
+
+    handleCloseCameraModal();
+    await processImageForImport(blob, 'Foto capturada. Revise o texto reconhecido e clique em "Analisar texto".');
+  };
+
+  useEffect(() => {
+    if (!isCameraModalOpen) {
+      stopCameraStream();
+      return;
+    }
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError('Este navegador não suporta câmera embutida nesta tela. Use "Enviar foto" como alternativa.');
+      return;
+    }
+
+    let isActive = true;
+
+    const startCamera = async () => {
+      try {
+        const preferredStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+          },
+          audio: false,
+        });
+
+        if (!isActive) {
+          preferredStream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+
+        cameraStreamRef.current = preferredStream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = preferredStream;
+          await videoRef.current.play().catch(() => undefined);
+        }
+      } catch {
+        try {
+          const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+
+          if (!isActive) {
+            fallbackStream.getTracks().forEach((track) => track.stop());
+            return;
+          }
+
+          cameraStreamRef.current = fallbackStream;
+          if (videoRef.current) {
+            videoRef.current.srcObject = fallbackStream;
+            await videoRef.current.play().catch(() => undefined);
+          }
+        } catch {
+          setCameraError('Não foi possível acessar a câmera. Se a prévia ficar preta ou houver bloqueio, use "Enviar foto".');
+        }
+      }
+    };
+
+    void startCamera();
+
+    return () => {
+      isActive = false;
+      stopCameraStream();
+    };
+  }, [isCameraModalOpen]);
 
   const handleAnalyzeImportText = () => {
     setOcrError(null);
@@ -812,12 +941,20 @@ export default function RegistroResultados() {
                   Carregar modelo no texto
                 </button>
 
+                <button
+                  type="button"
+                  onClick={handleOpenCameraModal}
+                  disabled={isDisabled || isOcrLoading}
+                  className="inline-flex h-9 items-center justify-center rounded-lg border border-[#315770] bg-[#102536] px-3 text-xs font-semibold text-slate-200 transition hover:border-[#ff9a63] hover:text-[#ffcfb2] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Usar câmera
+                </button>
+
                 <label className="inline-flex cursor-pointer items-center justify-center rounded-lg border border-[#315770] bg-[#102536] px-3 py-2 text-xs font-semibold text-slate-200 transition hover:border-[#ff9a63] hover:text-[#ffcfb2]">
-                  {isOcrLoading ? 'Lendo imagem...' : 'Abrir câmera/arquivo'}
+                  {isOcrLoading ? 'Lendo imagem...' : 'Enviar foto'}
                   <input
                     type="file"
                     accept="image/*"
-                    capture="environment"
                     className="hidden"
                     onChange={handleImageCaptureForImport}
                     disabled={isDisabled || isOcrLoading}
@@ -1069,6 +1206,57 @@ export default function RegistroResultados() {
           </button>
         </form>
       </section>
+
+      {isCameraModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#01060c]/75 p-3 backdrop-blur-[2px] sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-label="Capturar foto da anotação">
+          <button type="button" className="absolute inset-0 cursor-default" aria-label="Fechar captura" onClick={handleCloseCameraModal} />
+
+          <section className="relative z-10 w-full max-w-2xl rounded-2xl border border-[#315770] bg-[#0b1a25] p-4 shadow-[0_24px_60px_rgba(0,0,0,0.45)] sm:p-5">
+            <header className="mb-3 flex items-start justify-between gap-3 border-b border-[#244357] pb-3">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-50">Capturar anotação</h2>
+                <p className="text-sm text-slate-300">Centralize o papel e tire a foto quando a prévia estiver nítida.</p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleCloseCameraModal}
+                className="rounded-lg border border-[#315770] bg-[#102536] px-2.5 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-[#ff9a63] hover:text-[#ffcfb2]"
+              >
+                Fechar
+              </button>
+            </header>
+
+            <div className="overflow-hidden rounded-xl border border-[#244357] bg-black">
+              <video ref={videoRef} className="aspect-[3/4] w-full bg-black object-cover" autoPlay playsInline muted />
+            </div>
+
+            {cameraError ? <p className="mt-3 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">{cameraError}</p> : null}
+
+            <p className="mt-3 text-xs text-slate-400">Se a prévia continuar preta no seu aparelho, use o botão "Enviar foto" para abrir a câmera nativa ou enviar uma imagem da galeria.</p>
+
+            <footer className="mt-4 flex flex-wrap justify-end gap-2 border-t border-[#244357] pt-3">
+              <button
+                type="button"
+                onClick={handleCloseCameraModal}
+                className="rounded-lg border border-[#315770] bg-[#102536] px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-[#ff9a63] hover:text-[#ffcfb2]"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleCaptureCameraPhoto}
+                disabled={isOcrLoading}
+                className="rounded-lg bg-[#ff5e00] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#ff7a2f] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Capturar foto
+              </button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
+
+      <iframe ref={printFrameRef} title="print-ocr-template" className="hidden" />
     </main>
   );
 }
