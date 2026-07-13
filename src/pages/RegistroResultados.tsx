@@ -54,6 +54,13 @@ type ImportPreview = {
   encontrados: number;
 };
 
+type NameMatchResult = {
+  jogadorId: string | null;
+  nome: string | null;
+  confidence: number;
+  strategy: 'exact' | 'contains' | 'fuzzy' | 'none';
+};
+
 function normalizeText(value: string): string {
   return value
     .normalize('NFD')
@@ -87,6 +94,69 @@ function parseMoneyValue(value: string): number | undefined {
   if (Number.isNaN(parsed)) return undefined;
 
   return parsed;
+}
+
+function levenshteinDistance(a: string, b: string): number {
+  if (a === b) {
+    return 0;
+  }
+
+  if (a.length === 0) {
+    return b.length;
+  }
+
+  if (b.length === 0) {
+    return a.length;
+  }
+
+  const matrix: number[][] = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
+
+  for (let i = 0; i <= a.length; i += 1) {
+    matrix[i][0] = i;
+  }
+
+  for (let j = 0; j <= b.length; j += 1) {
+    matrix[0][j] = j;
+  }
+
+  for (let i = 1; i <= a.length; i += 1) {
+    for (let j = 1; j <= b.length; j += 1) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + cost,
+      );
+    }
+  }
+
+  return matrix[a.length][b.length];
+}
+
+function similarityScore(a: string, b: string): number {
+  const maxLength = Math.max(a.length, b.length);
+  if (maxLength === 0) {
+    return 1;
+  }
+
+  return 1 - levenshteinDistance(a, b) / maxLength;
+}
+
+function buildOcrTemplateText(blankRows = 14): string {
+  const header = [
+    '# MODELO OCR - POKER',
+    '# 1 linha por participante, mantendo os rótulos',
+    '# Exemplo de linha preenchida:',
+    '# NOME: JOAO SILVA | TIPO: jogador | COLOCACAO: 2 | REBUYS: 1 | ADDON: sim | JANTOU: sim | CHEF: nao | MELHOR MAO: nao | SALAO: nao | PAGOU JANTA: 32,50 | OUTROS: 0,00',
+    '',
+  ];
+
+  const rows = Array.from({ length: blankRows }, (_, index) => {
+    return `${index + 1}. NOME:  | TIPO: jogador | COLOCACAO:  | REBUYS: 0 | ADDON: nao | JANTOU: nao | CHEF: nao | MELHOR MAO: nao | SALAO: nao | PAGOU JANTA: 0,00 | OUTROS: 0,00`;
+  });
+
+  return [...header, ...rows].join('\n');
 }
 
 function parseParticipantLine(line: string): ParsedImportRow | null {
@@ -233,6 +303,10 @@ export default function RegistroResultados() {
   const [importPreviewRows, setImportPreviewRows] = useState<RegistroFormRow[]>([]);
   const [importWarnings, setImportWarnings] = useState<string[]>([]);
 
+  const etapaSelecionada = useMemo(() => {
+    return etapas.find((etapa) => String(etapa.id) === etapaId) ?? null;
+  }, [etapaId, etapas]);
+
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
@@ -286,22 +360,49 @@ export default function RegistroResultados() {
     }));
   }, [jogadores]);
 
-  const findJogadorIdFromName = (nome: string): string | null => {
+  const findJogadorFromName = (nome: string): NameMatchResult => {
     const normalized = normalizeText(nome);
-    if (!normalized) return null;
+    if (!normalized) {
+      return { jogadorId: null, nome: null, confidence: 0, strategy: 'none' };
+    }
 
     const exactMatch = jogadoresPorNome.find((item) => item.normalized === normalized);
-    if (exactMatch) return exactMatch.id;
+    if (exactMatch) {
+      return { jogadorId: exactMatch.id, nome: exactMatch.nome, confidence: 1, strategy: 'exact' };
+    }
 
     const includesMatch = jogadoresPorNome.filter(
       (item) => item.normalized.includes(normalized) || normalized.includes(item.normalized),
     );
 
     if (includesMatch.length === 1) {
-      return includesMatch[0].id;
+      return {
+        jogadorId: includesMatch[0].id,
+        nome: includesMatch[0].nome,
+        confidence: 0.9,
+        strategy: 'contains',
+      };
     }
 
-    return null;
+    const fuzzyCandidates = jogadoresPorNome
+      .map((item) => ({ item, score: similarityScore(normalized, item.normalized) }))
+      .sort((a, b) => b.score - a.score);
+
+    const best = fuzzyCandidates[0];
+    const second = fuzzyCandidates[1];
+    const minAcceptScore = 0.72;
+    const minGap = 0.08;
+
+    if (best && best.score >= minAcceptScore && (!second || best.score - second.score >= minGap)) {
+      return {
+        jogadorId: best.item.id,
+        nome: best.item.nome,
+        confidence: Number(best.score.toFixed(2)),
+        strategy: 'fuzzy',
+      };
+    }
+
+    return { jogadorId: null, nome: null, confidence: 0, strategy: 'none' };
   };
 
   const buildImportPreview = (parsedRows: ParsedImportRow[]): ImportPreview => {
@@ -309,10 +410,14 @@ export default function RegistroResultados() {
     let pagadorSalaoDetectado = false;
 
     const previewRows: RegistroFormRow[] = parsedRows.flatMap((parsed) => {
-      const jogadorId = findJogadorIdFromName(parsed.nome);
-      if (!jogadorId) {
+      const match = findJogadorFromName(parsed.nome);
+      if (!match.jogadorId) {
         warnings.push(`Jogador não encontrado automaticamente: ${parsed.nome}`);
         return [];
+      }
+
+      if (match.strategy === 'fuzzy' && match.nome) {
+        warnings.push(`Nome aproximado: "${parsed.nome}" -> "${match.nome}" (${Math.round(match.confidence * 100)}%).`);
       }
 
       const isPagadorSalao = parsed.pagouSalao === true && !pagadorSalaoDetectado;
@@ -323,7 +428,7 @@ export default function RegistroResultados() {
       return [
         {
           id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-          jogadorId,
+          jogadorId: match.jogadorId,
           tipo: parsed.tipo ?? 'jogador',
           cozinheiro: parsed.cozinheiro ?? false,
           jantou: parsed.cozinheiro ? false : (parsed.jantou ?? false),
@@ -347,6 +452,94 @@ export default function RegistroResultados() {
       warnings,
       encontrados: previewRows.length,
     };
+  };
+
+  const handleLoadOcrTemplate = () => {
+    setOcrRawText(buildOcrTemplateText());
+    setImportPreviewRows([]);
+    setImportWarnings([]);
+    setOcrError(null);
+    setSuccess('Modelo OCR carregado no campo de texto.');
+  };
+
+  const handlePrintOcrTemplate = () => {
+    const etapaTitulo = etapaSelecionada
+      ? `${etapaSelecionada.codigo_etapa} - ${new Date(etapaSelecionada.data_etapa).toLocaleDateString('pt-BR')}`
+      : 'Etapa não selecionada';
+
+    const linhasTemplate = Array.from({ length: 14 }, (_, index) => {
+      return `
+        <tr>
+          <td>${index + 1}</td>
+          <td></td>
+          <td>jogador</td>
+          <td></td>
+          <td>0</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+      `;
+    }).join('');
+
+    const popup = window.open('', '_blank', 'noopener,noreferrer,width=1200,height=900');
+    if (!popup) {
+      setOcrError('Não foi possível abrir a janela de impressão. Verifique o bloqueador de pop-up.');
+      return;
+    }
+
+    popup.document.write(`
+      <html>
+        <head>
+          <title>Modelo OCR - Poker</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 24px; color: #111; }
+            h1 { margin: 0 0 6px 0; font-size: 20px; }
+            p { margin: 4px 0; font-size: 12px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+            th, td { border: 1px solid #333; padding: 6px; font-size: 11px; text-align: left; height: 24px; }
+            th { background: #f0f0f0; }
+            .small { font-size: 10px; color: #444; margin-top: 8px; }
+            .w-num { width: 28px; text-align: center; }
+            .w-name { width: 200px; }
+            .w-tiny { width: 65px; }
+          </style>
+        </head>
+        <body>
+          <h1>Modelo de Anotação OCR - Poker</h1>
+          <p><strong>Etapa:</strong> ${etapaTitulo}</p>
+          <p><strong>Data do preenchimento:</strong> ____/____/______</p>
+          <p class="small">Preencha em letra de forma, uma linha por participante. Use "sim"/"não" para campos booleanos.</p>
+          <table>
+            <thead>
+              <tr>
+                <th class="w-num">#</th>
+                <th class="w-name">Nome</th>
+                <th class="w-tiny">Tipo</th>
+                <th class="w-tiny">Coloc.</th>
+                <th class="w-tiny">Rebuys</th>
+                <th class="w-tiny">Add-on</th>
+                <th class="w-tiny">Jantou</th>
+                <th class="w-tiny">Chef</th>
+                <th class="w-tiny">M. Mão</th>
+                <th class="w-tiny">Salão</th>
+                <th class="w-tiny">Pagou Janta</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${linhasTemplate}
+            </tbody>
+          </table>
+          <p class="small">Depois da foto, use o formato textual padrão no sistema se quiser corrigir manualmente.</p>
+        </body>
+      </html>
+    `);
+    popup.document.close();
+    popup.focus();
+    popup.print();
   };
 
   const handleImageCaptureForImport = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -600,18 +793,42 @@ export default function RegistroResultados() {
                 </p>
               </div>
 
-              <label className="inline-flex cursor-pointer items-center justify-center rounded-lg border border-[#315770] bg-[#102536] px-3 py-2 text-xs font-semibold text-slate-200 transition hover:border-[#ff9a63] hover:text-[#ffcfb2]">
-                {isOcrLoading ? 'Lendo imagem...' : 'Abrir câmera/arquivo'}
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  className="hidden"
-                  onChange={handleImageCaptureForImport}
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={handlePrintOcrTemplate}
+                  disabled={isDisabled}
+                  className="inline-flex h-9 items-center justify-center rounded-lg border border-[#315770] bg-[#102536] px-3 text-xs font-semibold text-slate-200 transition hover:border-[#ff9a63] hover:text-[#ffcfb2] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Imprimir modelo
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleLoadOcrTemplate}
                   disabled={isDisabled || isOcrLoading}
-                />
-              </label>
+                  className="inline-flex h-9 items-center justify-center rounded-lg border border-[#315770] bg-[#102536] px-3 text-xs font-semibold text-slate-200 transition hover:border-[#ff9a63] hover:text-[#ffcfb2] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Carregar modelo no texto
+                </button>
+
+                <label className="inline-flex cursor-pointer items-center justify-center rounded-lg border border-[#315770] bg-[#102536] px-3 py-2 text-xs font-semibold text-slate-200 transition hover:border-[#ff9a63] hover:text-[#ffcfb2]">
+                  {isOcrLoading ? 'Lendo imagem...' : 'Abrir câmera/arquivo'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="hidden"
+                    onChange={handleImageCaptureForImport}
+                    disabled={isDisabled || isOcrLoading}
+                  />
+                </label>
+              </div>
             </div>
+
+            <p className="mt-2 text-[11px] text-slate-400">
+              Dica OCR: use o modelo impresso, letra de forma, boa iluminação e foto tirada de cima.
+            </p>
 
             <div className="mt-3 grid gap-3 lg:grid-cols-2">
               <div>
