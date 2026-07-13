@@ -24,6 +24,14 @@ type PersistedPreJogoState = {
   drawnAt: string | null;
 };
 
+type RemotePreJogoRow = {
+  etapa_id: number;
+  participant_ids: number[];
+  tables_json: number[][];
+  drawn_at: string | null;
+  updated_at?: string;
+};
+
 const STORAGE_PREFIX = 'poker_prejogo_state_v1';
 const MAX_JOGADORES = 28;
 const POSITIONS = ['Dealer', 'Small', 'Big', '4', '5', '6', '7', '8', '9'] as const;
@@ -33,8 +41,8 @@ const SEAT_COORDS = [
   { top: '20%', left: '71%' },
   { top: '39%', left: '83%' },
   { top: '61%', left: '75%' },
-  { top: '75%', left: '58%' },
-  { top: '75%', left: '42%' },
+  { top: '79%', left: '62%' },
+  { top: '79%', left: '38%' },
   { top: '61%', left: '25%' },
   { top: '39%', left: '17%' },
   { top: '20%', left: '29%' },
@@ -118,6 +126,17 @@ function getStorageKeyForEtapa(etapaId: string): string {
   return `${STORAGE_PREFIX}:${etapaId}`;
 }
 
+function parsePersistedState(payload: PersistedPreJogoState | null | undefined): PersistedPreJogoState {
+  const participantIds = uniqueNumberList((payload?.participantIds ?? []).filter((id) => Number.isFinite(id) && id > 0));
+  const tables = (payload?.tables ?? []).map((table) => table.filter((id) => Number.isFinite(id) && id > 0));
+
+  return {
+    participantIds,
+    tables,
+    drawnAt: payload?.drawnAt ?? null,
+  };
+}
+
 export default function PreJogo() {
   const [etapas, setEtapas] = useState<Etapa[]>([]);
   const [jogadores, setJogadores] = useState<Jogador[]>([]);
@@ -128,8 +147,11 @@ export default function PreJogo() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [syncWarning, setSyncWarning] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const mesasExportRef = useRef<HTMLDivElement | null>(null);
+  const isRemoteTableAvailableRef = useRef<boolean>(true);
 
   useEffect(() => {
     const loadData = async () => {
@@ -161,6 +183,7 @@ export default function PreJogo() {
       const etapasData = (etapasResult.data ?? []) as Etapa[];
       setJogadores(jogadoresData);
       setEtapas(etapasData);
+      setSyncWarning(null);
 
       if (etapasData.length > 0) {
         setEtapaId(String(etapasData[0].id));
@@ -173,6 +196,37 @@ export default function PreJogo() {
   }, []);
 
   useEffect(() => {
+    const restoreFromLocalStorage = () => {
+      const storageKey = getStorageKeyForEtapa(etapaId);
+      const persistedRaw = localStorage.getItem(storageKey);
+
+      if (!persistedRaw) {
+        setRows(['']);
+        setLatePlayerId('');
+        setSorteio({ tables: [], drawnAt: null });
+        return;
+      }
+
+      try {
+        const parsed = JSON.parse(persistedRaw) as PersistedPreJogoState;
+        const normalized = parsePersistedState(parsed);
+
+        setRows(normalized.participantIds.length > 0 ? normalizeSelectionRows(normalized.participantIds.map(String)) : ['']);
+        setLatePlayerId('');
+        setSorteio({
+          tables: normalized.tables,
+          drawnAt: normalized.drawnAt,
+        });
+        setError(null);
+        setSuccess(null);
+      } catch {
+        localStorage.removeItem(storageKey);
+        setRows(['']);
+        setLatePlayerId('');
+        setSorteio({ tables: [], drawnAt: null });
+      }
+    };
+
     if (!etapaId) {
       setRows(['']);
       setLatePlayerId('');
@@ -180,35 +234,69 @@ export default function PreJogo() {
       return;
     }
 
-    const storageKey = getStorageKeyForEtapa(etapaId);
-    const persistedRaw = localStorage.getItem(storageKey);
+    let cancelled = false;
 
-    if (!persistedRaw) {
-      setRows(['']);
-      setLatePlayerId('');
-      setSorteio({ tables: [], drawnAt: null });
-      return;
-    }
+    const restoreState = async () => {
+      setIsSyncing(true);
 
-    try {
-      const parsed = JSON.parse(persistedRaw) as PersistedPreJogoState;
-      const validIds = uniqueNumberList((parsed.participantIds ?? []).filter((id) => Number.isFinite(id)));
-      const validTables = (parsed.tables ?? []).map((table) => table.filter((id) => Number.isFinite(id)));
+      if (!isRemoteTableAvailableRef.current) {
+        restoreFromLocalStorage();
+        setIsSyncing(false);
+        return;
+      }
 
-      setRows(validIds.length > 0 ? normalizeSelectionRows(validIds.map(String)) : ['']);
+      const { data, error: remoteError } = await supabase
+        .from('pre_jogo_etapa')
+        .select('etapa_id, participant_ids, tables_json, drawn_at, updated_at')
+        .eq('etapa_id', Number(etapaId))
+        .maybeSingle();
+
+      if (cancelled) {
+        return;
+      }
+
+      if (remoteError) {
+        isRemoteTableAvailableRef.current = false;
+        setSyncWarning('Sincronização entre dispositivos indisponível: tabela pre_jogo_etapa não encontrada. Usando somente este dispositivo.');
+        restoreFromLocalStorage();
+        setIsSyncing(false);
+        return;
+      }
+
+      setSyncWarning(null);
+
+      if (!data) {
+        restoreFromLocalStorage();
+        setIsSyncing(false);
+        return;
+      }
+
+      const remote = data as RemotePreJogoRow;
+      const normalized = parsePersistedState({
+        participantIds: remote.participant_ids ?? [],
+        tables: remote.tables_json ?? [],
+        drawnAt: remote.drawn_at ?? null,
+      });
+
+      setRows(normalized.participantIds.length > 0 ? normalizeSelectionRows(normalized.participantIds.map(String)) : ['']);
       setLatePlayerId('');
       setSorteio({
-        tables: validTables,
-        drawnAt: parsed.drawnAt ?? null,
+        tables: normalized.tables,
+        drawnAt: normalized.drawnAt,
       });
+
+      const storageKey = getStorageKeyForEtapa(etapaId);
+      localStorage.setItem(storageKey, JSON.stringify(normalized));
       setError(null);
       setSuccess(null);
-    } catch {
-      localStorage.removeItem(storageKey);
-      setRows(['']);
-      setLatePlayerId('');
-      setSorteio({ tables: [], drawnAt: null });
-    }
+      setIsSyncing(false);
+    };
+
+    void restoreState();
+
+    return () => {
+      cancelled = true;
+    };
   }, [etapaId]);
 
   const confirmedPlayerIds = useMemo(() => {
@@ -246,13 +334,33 @@ export default function PreJogo() {
     };
 
     const storageKey = getStorageKeyForEtapa(etapaId);
+    const remotePayload: RemotePreJogoRow = {
+      etapa_id: Number(etapaId),
+      participant_ids: payload.participantIds,
+      tables_json: payload.tables,
+      drawn_at: payload.drawnAt,
+    };
 
     if (payload.participantIds.length === 0 && payload.tables.length === 0) {
       localStorage.removeItem(storageKey);
+
+      if (isRemoteTableAvailableRef.current) {
+        void supabase.from('pre_jogo_etapa').delete().eq('etapa_id', Number(etapaId));
+      }
+
       return;
     }
 
     localStorage.setItem(storageKey, JSON.stringify(payload));
+
+    if (isRemoteTableAvailableRef.current) {
+      void supabase.from('pre_jogo_etapa').upsert(remotePayload, { onConflict: 'etapa_id' }).then(({ error: upsertError }) => {
+        if (upsertError) {
+          isRemoteTableAvailableRef.current = false;
+          setSyncWarning('Falha ao sincronizar Pré-jogo entre dispositivos. Mantendo somente neste navegador.');
+        }
+      });
+    }
   }, [confirmedPlayerIds, etapaId, sorteio]);
 
   const updateRowValue = (index: number, value: string) => {
@@ -306,6 +414,9 @@ export default function PreJogo() {
   const handleResetSorteio = () => {
     if (etapaId) {
       localStorage.removeItem(getStorageKeyForEtapa(etapaId));
+      if (isRemoteTableAvailableRef.current) {
+        void supabase.from('pre_jogo_etapa').delete().eq('etapa_id', Number(etapaId));
+      }
     }
 
     setRows(['']);
@@ -336,6 +447,43 @@ export default function PreJogo() {
     });
   };
 
+  const openPrintWindow = (title: string, htmlBody: string, style: string) => {
+    const printFrame = document.createElement('iframe');
+    printFrame.style.position = 'fixed';
+    printFrame.style.right = '0';
+    printFrame.style.bottom = '0';
+    printFrame.style.width = '0';
+    printFrame.style.height = '0';
+    printFrame.style.border = '0';
+    document.body.appendChild(printFrame);
+
+    const doc = printFrame.contentDocument;
+    if (!doc) {
+      document.body.removeChild(printFrame);
+      throw new Error('Não foi possível inicializar impressão.');
+    }
+
+    doc.open();
+    doc.write(`
+      <html>
+        <head>
+          <title>${title}</title>
+          <style>${style}</style>
+        </head>
+        <body>${htmlBody}</body>
+      </html>
+    `);
+    doc.close();
+
+    window.setTimeout(() => {
+      printFrame.contentWindow?.focus();
+      printFrame.contentWindow?.print();
+      window.setTimeout(() => {
+        document.body.removeChild(printFrame);
+      }, 1500);
+    }, 200);
+  };
+
   const handleExportarImagem = async () => {
     setError(null);
     setSuccess(null);
@@ -349,16 +497,34 @@ export default function PreJogo() {
 
     try {
       const canvas = await captureMesasCanvas();
-      const dataUrl = canvas.toDataURL('image/png');
-      const link = document.createElement('a');
-      link.href = dataUrl;
-      link.download = `pre-jogo-${etapaSelecionadaLabel}.png`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob((generatedBlob) => resolve(generatedBlob), 'image/png'));
+
+      if (!blob) {
+        throw new Error('Falha ao gerar imagem');
+      }
+
+      const fileName = `pre-jogo-${etapaSelecionadaLabel}.png`;
+      const file = new File([blob], fileName, { type: 'image/png' });
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: `Pré-jogo ${etapaSelecionadaLabel}`,
+        });
+      } else {
+        const dataUrl = canvas.toDataURL('image/png');
+        const link = document.createElement('a');
+        link.href = dataUrl;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      }
+
       setSuccess('Imagem exportada com sucesso.');
-    } catch {
-      setError('Não foi possível exportar imagem das mesas.');
+    } catch (exportError) {
+      const message = exportError instanceof Error ? exportError.message : 'Erro desconhecido';
+      setError(`Não foi possível exportar imagem das mesas: ${message}.`);
     } finally {
       setIsExporting(false);
     }
@@ -378,37 +544,15 @@ export default function PreJogo() {
     try {
       const canvas = await captureMesasCanvas();
       const dataUrl = canvas.toDataURL('image/png');
-      const popup = window.open('', '_blank', 'noopener,noreferrer,width=1400,height=1000');
-
-      if (!popup) {
-        throw new Error('Popup bloqueado');
-      }
-
-      popup.document.write(`
-        <html>
-          <head>
-            <title>Pré-jogo ${etapaSelecionadaLabel}</title>
-            <style>
-              @page { size: A4 landscape; margin: 10mm; }
-              body { margin: 0; font-family: Arial, sans-serif; background: #07131d; color: #fff; }
-              .wrap { padding: 12px; }
-              h1 { font-size: 18px; margin: 0 0 10px; }
-              img { width: 100%; height: auto; border: 1px solid #244357; border-radius: 10px; }
-            </style>
-          </head>
-          <body>
-            <div class="wrap">
-              <h1>Pré-jogo - ${etapaSelecionadaLabel}</h1>
-              <img src="${dataUrl}" alt="Mesas sorteadas" />
-            </div>
-            <script>window.onload = () => window.print();</script>
-          </body>
-        </html>
-      `);
-      popup.document.close();
+      openPrintWindow(
+        `Pré-jogo ${etapaSelecionadaLabel}`,
+        `<div class="wrap"><h1>Pré-jogo - ${etapaSelecionadaLabel}</h1><img src="${dataUrl}" alt="Mesas sorteadas" /></div>`,
+        '@page { size: A4 landscape; margin: 10mm; } body { margin: 0; font-family: Arial, sans-serif; background: #07131d; color: #fff; } .wrap { padding: 12px; } h1 { font-size: 18px; margin: 0 0 10px; } img { width: 100%; height: auto; border: 1px solid #244357; border-radius: 10px; }',
+      );
       setSuccess('PDF pronto para impressão/exportação.');
-    } catch {
-      setError('Não foi possível abrir a exportação em PDF. Verifique bloqueio de pop-up.');
+    } catch (printError) {
+      const message = printError instanceof Error ? printError.message : 'Erro desconhecido';
+      setError(`Não foi possível abrir a exportação em PDF: ${message}.`);
     } finally {
       setIsExporting(false);
     }
@@ -424,13 +568,6 @@ export default function PreJogo() {
     }
 
     const etapaLabel = etapaSelecionadaLabel;
-    const popup = window.open('', '_blank', 'noopener,noreferrer,width=1400,height=1000');
-
-    if (!popup) {
-      setError('Não foi possível abrir a impressão. Verifique bloqueio de pop-up.');
-      return;
-    }
-
     const pagesHtml = sorteio.tables
       .map((table, tableIndex) => {
         const rowsHtml = Array.from({ length: 9 }, (_, seatIndex) => {
@@ -501,77 +638,56 @@ export default function PreJogo() {
       })
       .join('');
 
-    popup.document.write(`
-      <html>
-        <head>
-          <title>Fichas de Mesa - ${etapaLabel}</title>
-          <style>
-            @page { size: A4 landscape; margin: 10mm; }
-            * { box-sizing: border-box; }
-            body { margin: 0; font-family: Arial, sans-serif; color: #111; }
-            .print-page {
-              page-break-after: always;
-              min-height: 180mm;
-            }
-            .print-page:last-child { page-break-after: auto; }
-            .header {
-              display: flex;
-              justify-content: space-between;
-              align-items: flex-start;
-              gap: 10px;
-              margin-bottom: 8px;
-            }
-            h1 { margin: 0 0 4px 0; font-size: 16px; }
-            p { margin: 2px 0; font-size: 10px; }
-            .meta { text-align: right; }
-            table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-            th, td {
-              border: 1px solid #333;
-              padding: 3px;
-              font-size: 9px;
-              text-align: center;
-              height: 24px;
-              vertical-align: middle;
-            }
-            th { background: #f0f0f0; font-size: 8px; }
-            .num-col { width: 30px; font-weight: 700; }
-            .mark-col { width: 34px; }
-            .name-col { width: 220px; text-align: left; font-weight: 700; }
-            .rebuy-col { width: 220px; }
-            .money-col { width: 78px; }
-            .place-col { width: 58px; }
-            .circle {
-              display: inline-block;
-              width: 13px;
-              height: 13px;
-              border: 1.5px solid #111;
-              border-radius: 999px;
-            }
-            .circle.small {
-              width: 11px;
-              height: 11px;
-            }
-            .rebuy-grid {
-              display: grid;
-              grid-template-columns: repeat(10, 1fr);
-              gap: 2px;
-              align-items: center;
-            }
-            .hint {
-              margin-top: 6px;
-              font-size: 9px;
-              color: #444;
-            }
-          </style>
-        </head>
-        <body>
-          ${pagesHtml}
-          <script>window.onload = () => window.print();</script>
-        </body>
-      </html>
-    `);
-    popup.document.close();
-    setSuccess('Fichas por mesa abertas para impressão.');
+    try {
+      openPrintWindow(
+        `Fichas de Mesa - ${etapaLabel}`,
+        pagesHtml,
+        '@page { size: A4 landscape; margin: 10mm; } * { box-sizing: border-box; } body { margin: 0; font-family: Arial, sans-serif; color: #111; } .print-page { page-break-after: always; min-height: 180mm; } .print-page:last-child { page-break-after: auto; } .header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 8px; } h1 { margin: 0 0 4px 0; font-size: 16px; } p { margin: 2px 0; font-size: 10px; } .meta { text-align: right; } table { width: 100%; border-collapse: collapse; table-layout: fixed; } th, td { border: 1px solid #333; padding: 3px; font-size: 9px; text-align: center; height: 24px; vertical-align: middle; } th { background: #f0f0f0; font-size: 8px; } .num-col { width: 30px; font-weight: 700; } .mark-col { width: 34px; } .name-col { width: 220px; text-align: left; font-weight: 700; } .rebuy-col { width: 220px; } .money-col { width: 78px; } .place-col { width: 58px; } .circle { display: inline-block; width: 13px; height: 13px; border: 1.5px solid #111; border-radius: 999px; } .circle.small { width: 11px; height: 11px; } .rebuy-grid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 2px; align-items: center; } .hint { margin-top: 6px; font-size: 9px; color: #444; }',
+      );
+      setSuccess('Fichas por mesa abertas para impressão.');
+    } catch (printError) {
+      const message = printError instanceof Error ? printError.message : 'Erro desconhecido';
+      setError(`Não foi possível abrir a impressão de fichas: ${message}.`);
+    }
+  };
+
+  const handleRemoveConfirmedPlayer = (playerId: number) => {
+    setError(null);
+    setSuccess(null);
+
+    setRows((prev) => {
+      const filtered = prev.filter((value) => Number(value) !== playerId && value.trim() !== '');
+      return normalizeSelectionRows(filtered);
+    });
+
+    if (sorteio.tables.length === 0) {
+      setSuccess('Jogador removido da lista de confirmados.');
+      return;
+    }
+
+    const nextPlayers = currentDrawPlayerIds.filter((id) => id !== playerId);
+    const oldTableCount = tableCountForPlayers(currentDrawPlayerIds.length);
+    const newTableCount = tableCountForPlayers(nextPlayers.length);
+
+    if (nextPlayers.length === 0) {
+      setSorteio({ tables: [], drawnAt: null });
+      setSuccess('Jogador removido. Sorteio esvaziado.');
+      return;
+    }
+
+    if (newTableCount < oldTableCount) {
+      const redrawnTables = drawTables(nextPlayers);
+      setSorteio({ tables: redrawnTables, drawnAt: new Date().toISOString() });
+      setSuccess('Jogador removido. Novo sorteio realizado por redução no número de mesas.');
+      return;
+    }
+
+    const updatedTables = sorteio.tables
+      .map((table) => table.filter((id) => id !== playerId))
+      .filter((table) => table.length > 0);
+
+    setSorteio({ tables: updatedTables, drawnAt: new Date().toISOString() });
+    setSuccess('Jogador removido do sorteio.');
   };
 
   const handleAddLatePlayer = () => {
@@ -671,6 +787,23 @@ export default function PreJogo() {
             </span>
           </div>
 
+          {confirmedPlayerIds.length > 0 ? (
+            <div className="mb-3 flex flex-wrap gap-2">
+              {confirmedPlayerIds.map((playerId) => (
+                <button
+                  key={`confirmed-${playerId}`}
+                  type="button"
+                  onClick={() => handleRemoveConfirmedPlayer(playerId)}
+                  className="inline-flex items-center gap-2 rounded-full border border-[#315770] bg-[#102536] px-3 py-1 text-xs text-slate-100 transition hover:border-rose-400/60 hover:text-rose-200"
+                  title="Remover jogador confirmado"
+                >
+                  <span>{jogadorNomeMap.get(playerId) ?? `Jogador #${playerId}`}</span>
+                  <span className="text-rose-300">✕</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+
           <div className="max-h-[340px] space-y-2 overflow-y-auto pr-1">
             {rows.map((value, index) => {
               const usedByOthers = new Set(rows.filter((_, rowIndex) => rowIndex !== index).filter((item) => item !== ''));
@@ -760,6 +893,8 @@ export default function PreJogo() {
 
         {error ? <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</p> : null}
         {success ? <p className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{success}</p> : null}
+        {syncWarning ? <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">{syncWarning}</p> : null}
+        {isSyncing ? <p className="text-xs text-slate-300">Sincronizando estado da etapa...</p> : null}
 
         {sorteio.tables.length > 0 ? (
           <section ref={mesasExportRef} className="space-y-4">

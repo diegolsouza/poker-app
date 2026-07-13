@@ -69,6 +69,15 @@ CREATE TABLE IF NOT EXISTS registros_etapa (
     CONSTRAINT uk_registro_etapa_jogador UNIQUE(etapa_id, jogador_id)
 );
 
+-- Tabela de Pré-jogo por Etapa (sorteio de mesas)
+CREATE TABLE IF NOT EXISTS pre_jogo_etapa (
+    etapa_id INTEGER PRIMARY KEY REFERENCES etapas(id) ON DELETE CASCADE,
+    participant_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+    tables_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+    drawn_at TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- =====================================================
 -- ÍNDICES PARA OTIMIZAÇÃO
 -- =====================================================
@@ -79,6 +88,7 @@ CREATE INDEX idx_registros_etapa_id ON registros_etapa(etapa_id);
 CREATE INDEX idx_registros_jogador_id ON registros_etapa(jogador_id);
 CREATE INDEX idx_registros_colocacao ON registros_etapa(colocacao);
 CREATE INDEX idx_jogadores_ativo ON jogadores(ativo);
+CREATE INDEX idx_pre_jogo_updated_at ON pre_jogo_etapa(updated_at);
 
 -- =====================================================
 -- FUNÇÕES AUXILIARES PARA AUDITORIA
@@ -101,6 +111,11 @@ CREATE TRIGGER trigger_configuracoes_updated_at
 
 CREATE TRIGGER trigger_registros_etapa_updated_at
     BEFORE UPDATE ON registros_etapa
+    FOR EACH ROW
+    EXECUTE FUNCTION atualizar_updated_at();
+
+CREATE TRIGGER trigger_pre_jogo_updated_at
+    BEFORE UPDATE ON pre_jogo_etapa
     FOR EACH ROW
     EXECUTE FUNCTION atualizar_updated_at();
 
