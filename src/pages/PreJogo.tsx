@@ -284,7 +284,16 @@ export default function PreJogo() {
       setSyncWarning(null);
 
       if (!data) {
-        restoreFromLocalStorage();
+        const storageKey = getStorageKeyForEtapa(etapaId);
+        localStorage.removeItem(storageKey);
+
+        setRows(['']);
+        setPlayerSelectValue('');
+        setCanResortAfterNewPlayer(false);
+        setLatePlayerId('');
+        setSorteio({ tables: [], drawnAt: null });
+        setError(null);
+        setSuccess(null);
         setIsSyncing(false);
         hydratedEtapaIdRef.current = etapaId;
         return;
