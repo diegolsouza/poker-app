@@ -490,7 +490,7 @@ export default function TelaPix() {
       <section className="mx-auto w-full max-w-[1700px] space-y-6">
         <header className="flex flex-col gap-3 rounded-3xl border border-[#244357] bg-[#081723]/92 p-5 shadow-[0_18px_45px_rgba(3,8,14,0.42)] backdrop-blur sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-slate-50">Financeiro da Etapa</h1>
+            <h1 className="text-2xl font-bold text-slate-50">Financeiro</h1>
             <p className="mt-1 hidden text-sm text-slate-300 sm:block">
               Visualize os acertos da rodada com base nos registros da etapa selecionada.
             </p>
@@ -518,7 +518,7 @@ export default function TelaPix() {
 
         <section className="rounded-3xl border border-[#244357] bg-[#081723]/92 p-5 shadow-[0_18px_45px_rgba(3,8,14,0.42)]">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-slate-50">💰 Resumo Financeiro da Rodada</h2>
+            <h2 className="text-lg font-semibold text-slate-50">💰 Resumo Financeiro da Etapa</h2>
             {carregando ? <span className="text-sm text-slate-300">Carregando...</span> : null}
           </div>
 
@@ -683,8 +683,8 @@ export default function TelaPix() {
 
                   <div className="mt-3 space-y-1.5 text-xs text-slate-300">
                     <p className="font-semibold text-rose-300">Saídas</p>
-                    <p>Janta: {formatCurrency(calculos.totalSaidasJanta)}</p>
-                    <p>Salão: {formatCurrency(calculos.totalSaidasSalao)}</p>
+                    <p>Custo Janta: {formatCurrency(calculos.totalSaidasJanta)}</p>
+                    <p>Custo Salão: {formatCurrency(calculos.totalSaidasSalao)}</p>
                     <p>Premiações da rodada: {formatCurrency(calculos.totalSaidasPremiacaoRodada)}</p>
                     <p className="font-semibold text-rose-200">Total saídas: {formatCurrency(calculos.totalSaidasEtapa)}</p>
                   </div>
@@ -692,8 +692,8 @@ export default function TelaPix() {
                   <div className="mt-3 space-y-1.5 text-xs text-slate-300">
                     <p className="font-semibold text-slate-100">Conferência</p>
                     <p>Saldo após entradas e saídas: {formatCurrency(calculos.saldoContaEtapa)}</p>
-                    <p>Reserva esperada (Final + Caixinha): {formatCurrency(calculos.reservaEsperadaAcumulados)}</p>
-                    <p>Saídas da caixinha (fora da etapa): {formatCurrency(calculos.totalOutrosCustos)}</p>
+                    <p>Reserva adicionada (Final + Caixinha): {formatCurrency(calculos.reservaEsperadaAcumulados)}</p>
+                    <p>Saídas da caixinha: {formatCurrency(calculos.totalOutrosCustos)}</p>
                     <p className={`font-semibold ${contaEtapaFechou ? 'text-emerald-300' : 'text-rose-300'}`}>
                       Status: {contaEtapaFechou ? 'FECHOU' : 'NÃO FECHOU'}
                     </p>
