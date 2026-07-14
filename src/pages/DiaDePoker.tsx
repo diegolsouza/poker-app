@@ -540,9 +540,9 @@ export default function DiaDePoker() {
 
     let best: { row: MesaPlayerRow; score: number } | null = null;
 
-    rows.forEach((row) => {
+    for (const row of rows) {
       const nameTokens = normalizeText(row.nome).split(' ').filter(Boolean);
-      if (nameTokens.length === 0) return;
+      if (nameTokens.length === 0) continue;
 
       const hits = nameTokens.filter((token) => tokenSet.has(token)).length;
       const score = hits / nameTokens.length;
@@ -550,9 +550,17 @@ export default function DiaDePoker() {
       if (!best || score > best.score) {
         best = { row, score };
       }
-    });
+    }
 
-    return best && best.score >= 0.6 ? best.row : null;
+    if (!best) {
+      return null;
+    }
+
+    if (best.score < 0.6) {
+      return null;
+    }
+
+    return best.row;
   };
 
   const processVoiceTranscript = async (mesa: 1 | 2 | 3, rawText: string) => {
