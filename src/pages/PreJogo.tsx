@@ -510,27 +510,18 @@ export default function PreJogo() {
       });
     };
 
-    const printFrame = document.createElement('iframe');
-    printFrame.style.position = 'fixed';
-    printFrame.style.right = '0';
-    printFrame.style.bottom = '0';
-    printFrame.style.width = '1px';
-    printFrame.style.height = '1px';
-    printFrame.style.opacity = '0';
-    printFrame.style.pointerEvents = 'none';
-    printFrame.style.border = '0';
-    document.body.appendChild(printFrame);
-
-    const doc = printFrame.contentDocument;
-    if (!doc) {
-      document.body.removeChild(printFrame);
-      throw new Error('Não foi possível inicializar impressão.');
+    const printWindow = window.open('', '_blank', 'width=1200,height=800');
+    if (!printWindow || !printWindow.document) {
+      throw new Error('O navegador bloqueou a janela de impressão.');
     }
+
+    const doc = printWindow.document;
 
     doc.open();
     doc.write(`
       <html>
         <head>
+          <meta charset="utf-8" />
           <title>${title}</title>
           <style>${style}</style>
         </head>
@@ -541,24 +532,20 @@ export default function PreJogo() {
 
     await waitForAssets(doc);
 
-    const frameWindow = printFrame.contentWindow;
-    if (!frameWindow) {
-      document.body.removeChild(printFrame);
-      throw new Error('Janela de impressão indisponível.');
-    }
-
-    let removed = false;
+    let closed = false;
     const cleanup = () => {
-      if (removed) return;
-      removed = true;
-      if (printFrame.parentNode) {
-        printFrame.parentNode.removeChild(printFrame);
+      if (closed) return;
+      closed = true;
+      try {
+        printWindow.close();
+      } catch {
+        // ignore
       }
     };
 
-    frameWindow.onafterprint = cleanup;
-    frameWindow.focus();
-    frameWindow.print();
+    printWindow.onafterprint = cleanup;
+    printWindow.focus();
+    printWindow.print();
 
     window.setTimeout(cleanup, 30000);
   };
