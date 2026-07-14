@@ -78,6 +78,17 @@ CREATE TABLE IF NOT EXISTS pre_jogo_etapa (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Tabela de PINs por Mesa/Etapa
+CREATE TABLE IF NOT EXISTS etapa_mesa_pins (
+    id SERIAL PRIMARY KEY,
+    etapa_id INTEGER NOT NULL REFERENCES etapas(id) ON DELETE CASCADE,
+    numero_mesa INTEGER NOT NULL CHECK (numero_mesa BETWEEN 1 AND 3),
+    pin_codigo VARCHAR(4) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_etapa_mesa_pin UNIQUE(etapa_id, numero_mesa)
+);
+
 -- =====================================================
 -- ÍNDICES PARA OTIMIZAÇÃO
 -- =====================================================
@@ -89,6 +100,7 @@ CREATE INDEX idx_registros_jogador_id ON registros_etapa(jogador_id);
 CREATE INDEX idx_registros_colocacao ON registros_etapa(colocacao);
 CREATE INDEX idx_jogadores_ativo ON jogadores(ativo);
 CREATE INDEX idx_pre_jogo_updated_at ON pre_jogo_etapa(updated_at);
+CREATE INDEX idx_etapa_mesa_pins_etapa_id ON etapa_mesa_pins(etapa_id);
 
 -- =====================================================
 -- FUNÇÕES AUXILIARES PARA AUDITORIA
@@ -116,6 +128,11 @@ CREATE TRIGGER trigger_registros_etapa_updated_at
 
 CREATE TRIGGER trigger_pre_jogo_updated_at
     BEFORE UPDATE ON pre_jogo_etapa
+    FOR EACH ROW
+    EXECUTE FUNCTION atualizar_updated_at();
+
+CREATE TRIGGER trigger_etapa_mesa_pins_updated_at
+    BEFORE UPDATE ON etapa_mesa_pins
     FOR EACH ROW
     EXECUTE FUNCTION atualizar_updated_at();
 

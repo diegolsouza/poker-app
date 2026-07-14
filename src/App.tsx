@@ -24,6 +24,7 @@ function App() {
 					<Route path="admin" element={<RequireAdminAuth />}>
 						<Route path="cadastro-basico" element={<CadastroBasico />} />
 						<Route path="resultados" element={<RegistroResultados />} />
+						<Route path="dia-de-poker" element={<DiaDePoker />} />
 						<Route path="configuracoes" element={<Configuracoes />} />
 					</Route>
 					<Route path="financeiro" element={<TelaPix />} />

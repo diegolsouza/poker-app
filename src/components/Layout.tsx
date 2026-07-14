@@ -15,6 +15,7 @@ const commonNavItems = [
 const adminNavItems = [
   { label: 'Cadastro', to: '/admin/cadastro-basico' },
   { label: 'Resultados', to: '/admin/resultados' },
+  { label: 'Dia de Poker', to: '/admin/dia-de-poker' },
   { label: 'Configurações', to: '/admin/configuracoes' },
 ];
 

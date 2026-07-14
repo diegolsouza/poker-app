@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import supabase from '../supabaseClient';
+import { isAdminAuthenticated } from '../utils/adminAuth';
 
 type EtapaStatus = 'pendente' | 'em_andamento' | 'finalizada';
 type TabKey = 'admin' | 'mesa1' | 'mesa2' | 'mesa3';
@@ -33,6 +35,8 @@ type MesaPlayerRow = {
 
 type MesaRowsState = Record<1 | 2 | 3, MesaPlayerRow[]>;
 
+type MesaPinState = Record<1 | 2 | 3, string>;
+
 type RecognitionLike = {
   lang: string;
   continuous: boolean;
@@ -52,6 +56,9 @@ const TAB_LABELS: Record<TabKey, string> = {
   mesa2: 'Mesa 2',
   mesa3: 'Mesa 3',
 };
+
+const PUBLIC_TABS: TabKey[] = ['mesa1', 'mesa2', 'mesa3'];
+const ADMIN_TABS: TabKey[] = ['admin', 'mesa1', 'mesa2', 'mesa3'];
 
 const EMPTY_MESAS: MesaRowsState = {
   1: [],
@@ -152,6 +159,10 @@ function buildMesasFromSources(
 }
 
 export default function DiaDePoker() {
+  const location = useLocation();
+  const adminLoggedIn = isAdminAuthenticated();
+  const isAdminArea = location.pathname.startsWith('/admin');
+  const canViewAdminTab = isAdminArea && adminLoggedIn;
   const [tab, setTab] = useState<TabKey>('admin');
   const [etapas, setEtapas] = useState<Etapa[]>([]);
   const [jogadores, setJogadores] = useState<Jogador[]>([]);
@@ -168,6 +179,13 @@ export default function DiaDePoker() {
   const [error, setError] = useState<string | null>(null);
   const [speechSupported, setSpeechSupported] = useState<boolean>(false);
   const [listeningMesa, setListeningMesa] = useState<1 | 2 | 3 | null>(null);
+  const [mesaPins, setMesaPins] = useState<MesaPinState>({ 1: '', 2: '', 3: '' });
+  const [pinInputByMesa, setPinInputByMesa] = useState<MesaPinState>({ 1: '', 2: '', 3: '' });
+  const [mesaUnlocked, setMesaUnlocked] = useState<Record<1 | 2 | 3, boolean>>({
+    1: false,
+    2: false,
+    3: false,
+  });
   const [lastVoiceTextByMesa, setLastVoiceTextByMesa] = useState<Record<1 | 2 | 3, string>>({
     1: '',
     2: '',
@@ -222,6 +240,26 @@ export default function DiaDePoker() {
     () => etapas.filter((item) => item.status === 'pendente' || item.status === 'em_andamento'),
     [etapas],
   );
+
+  const visibleTabs = canViewAdminTab ? ADMIN_TABS : PUBLIC_TABS;
+
+  useEffect(() => {
+    if (!canViewAdminTab && tab === 'admin') {
+      setTab('mesa1');
+    }
+  }, [canViewAdminTab, tab]);
+
+  useEffect(() => {
+    if (canViewAdminTab && tab !== 'admin' && !ADMIN_TABS.includes(tab)) {
+      setTab('admin');
+    }
+  }, [canViewAdminTab, tab]);
+
+  useEffect(() => {
+    if (!canViewAdminTab && tab === 'admin') {
+      setTab('mesa1');
+    }
+  }, [canViewAdminTab, selectedEtapaId, tab]);
 
   useEffect(() => {
     mesasRef.current = mesas;
@@ -319,17 +357,21 @@ export default function DiaDePoker() {
 
       if (!selectedEtapaId) {
         setMesas(emptyMesasState());
+        setMesaPins({ 1: '', 2: '', 3: '' });
+        setMesaUnlocked({ 1: false, 2: false, 3: false });
+        setPinInputByMesa({ 1: '', 2: '', 3: '' });
         return;
       }
 
       const etapaIdNum = Number(selectedEtapaId);
 
-      const [preJogoResp, tempResp] = await Promise.all([
+      const [preJogoResp, tempResp, pinsResp] = await Promise.all([
         supabase.from('pre_jogo_etapa').select('tables_json').eq('etapa_id', etapaIdNum).maybeSingle(),
         supabase
           .from('registros_mesas_temp')
           .select('etapa_id, jogador_id, numero_mesa, rebuys, fez_addon')
           .eq('etapa_id', etapaIdNum),
+        supabase.from('etapa_mesa_pins').select('numero_mesa, pin_codigo').eq('etapa_id', etapaIdNum),
       ]);
 
       if (preJogoResp.error) {
@@ -344,13 +386,77 @@ export default function DiaDePoker() {
         return;
       }
 
+      if (pinsResp.error) {
+        setError(`Erro ao carregar PINs das mesas: ${pinsResp.error.message}`);
+        setMesas(emptyMesasState());
+        return;
+      }
+
       const tables = (preJogoResp.data?.tables_json ?? []) as number[][];
       const tempRows = (tempResp.data ?? []) as RegistroMesaTemp[];
       setMesas(buildMesasFromSources(jogadoresMap, tables, tempRows));
+
+      const loadedPins: MesaPinState = { 1: '', 2: '', 3: '' };
+      (pinsResp.data ?? []).forEach((row: any) => {
+        const mesa = Number(row.numero_mesa) as 1 | 2 | 3;
+        if (mesa < 1 || mesa > 3) return;
+        loadedPins[mesa] = String(row.pin_codigo ?? '');
+      });
+
+      setMesaPins(loadedPins);
+      setPinInputByMesa({ 1: '', 2: '', 3: '' });
+
+      if (canViewAdminTab) {
+        setMesaUnlocked({ 1: true, 2: true, 3: true });
+      } else {
+        const etapaKey = String(etapaIdNum);
+        const unlockState: Record<1 | 2 | 3, boolean> = { 1: false, 2: false, 3: false };
+
+        ([1, 2, 3] as Array<1 | 2 | 3>).forEach((mesa) => {
+          const key = `poker_mesa_unlock:${etapaKey}:${mesa}`;
+          unlockState[mesa] = sessionStorage.getItem(key) === '1';
+        });
+
+        setMesaUnlocked(unlockState);
+      }
     };
 
     void loadEtapaData();
-  }, [selectedEtapaId, jogadoresMap]);
+  }, [selectedEtapaId, jogadoresMap, canViewAdminTab]);
+
+  const generateMesaPin = (): string => String(1000 + Math.floor(Math.random() * 9000));
+
+  const unlockMesaWithPin = (mesa: 1 | 2 | 3) => {
+    if (!selectedEtapaId) {
+      setError('Selecione uma etapa válida para liberar a mesa.');
+      return;
+    }
+
+    if (canViewAdminTab) {
+      setMesaUnlocked((current) => ({ ...current, [mesa]: true }));
+      return;
+    }
+
+    const typedPin = pinInputByMesa[mesa].trim();
+    const expectedPin = mesaPins[mesa].trim();
+
+    if (!expectedPin) {
+      setError(`PIN da Mesa ${mesa} ainda não foi gerado pelo administrador.`);
+      return;
+    }
+
+    if (typedPin !== expectedPin) {
+      setError(`PIN inválido para a Mesa ${mesa}.`);
+      return;
+    }
+
+    const etapaKey = String(selectedEtapaId);
+    sessionStorage.setItem(`poker_mesa_unlock:${etapaKey}:${mesa}`, '1');
+    setMesaUnlocked((current) => ({ ...current, [mesa]: true }));
+    setPinInputByMesa((current) => ({ ...current, [mesa]: '' }));
+    setError(null);
+    setMessage(`Mesa ${mesa} liberada para registro.`);
+  };
 
   const upsertMesaRegistro = async (
     etapaId: number,
@@ -794,8 +900,35 @@ export default function DiaDePoker() {
       return;
     }
 
+    const generatedPins: MesaPinState = {
+      1: generateMesaPin(),
+      2: generateMesaPin(),
+      3: generateMesaPin(),
+    };
+
+    const pinsPayload = ([1, 2, 3] as Array<1 | 2 | 3>).map((mesa) => ({
+      etapa_id: etapaIdNum,
+      numero_mesa: mesa,
+      pin_codigo: generatedPins[mesa],
+    }));
+
+    const { error: pinError } = await supabase.from('etapa_mesa_pins').upsert(pinsPayload, {
+      onConflict: 'etapa_id,numero_mesa',
+    });
+
+    if (pinError) {
+      setError(`Etapa iniciada, mas houve erro ao gerar PINs das mesas: ${pinError.message}`);
+      setIsSaving(false);
+      return;
+    }
+
+    setMesaPins(generatedPins);
+    setMesaUnlocked(canViewAdminTab ? { 1: true, 2: true, 3: true } : { 1: false, 2: false, 3: false });
+
     await refreshEtapas();
-    setMessage('Etapa iniciada com sucesso. Mesários liberados para registrar.');
+    setMessage(
+      `Etapa iniciada. PINs: Mesa 1 = ${generatedPins[1]} | Mesa 2 = ${generatedPins[2]} | Mesa 3 = ${generatedPins[3]}`,
+    );
     setIsSaving(false);
   };
 
@@ -914,13 +1047,25 @@ export default function DiaDePoker() {
           Ao finalizar, os dados de <span className="font-semibold text-slate-100">registros_mesas_temp</span> serão
           migrados para <span className="font-semibold text-slate-100">registros_etapa</span> e os temporários removidos.
         </p>
+
+        {selectedEtapa?.status === 'em_andamento' ? (
+          <div className="grid gap-2 rounded-xl border border-[#2c4e65] bg-[#0a1f2d] p-3 text-sm text-slate-200 sm:grid-cols-3">
+            <p className="font-semibold">Mesa 1 PIN: {mesaPins[1] || '----'}</p>
+            <p className="font-semibold">Mesa 2 PIN: {mesaPins[2] || '----'}</p>
+            <p className="font-semibold">Mesa 3 PIN: {mesaPins[3] || '----'}</p>
+          </div>
+        ) : null}
       </div>
     );
   };
 
   const renderMesaTab = (mesa: 1 | 2 | 3) => {
     const rows = mesas[mesa];
-    const blocked = !etapaEmAndamento;
+    const pinRequired = !canViewAdminTab;
+    const unlocked = canViewAdminTab ? true : mesaUnlocked[mesa];
+    const blockedByEtapa = !etapaEmAndamento;
+    const blockedByPin = pinRequired && !unlocked;
+    const blocked = blockedByEtapa || blockedByPin;
     const availablePlayers = jogadores.filter((item) => !jogadorMesaAtualMap.has(item.id));
 
     return (
@@ -965,9 +1110,54 @@ export default function DiaDePoker() {
           </p>
         ) : null}
 
-        {blocked ? (
+        {pinRequired ? (
+          <div className="rounded-xl border border-[#2c4e65] bg-[#0a1f2d] p-3">
+            <p className="text-sm text-slate-200">
+              <span className="font-semibold">Acesso da Mesa {mesa}:</span>{' '}
+              {unlocked ? 'liberado.' : 'insira o PIN de 4 dígitos para começar os registros.'}
+            </p>
+
+            {!unlocked ? (
+              <div className="mt-3 flex flex-wrap items-end gap-3">
+                <label className="grid gap-1 text-xs text-slate-300">
+                  PIN da Mesa {mesa}
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    maxLength={4}
+                    value={pinInputByMesa[mesa]}
+                    onChange={(event) =>
+                      setPinInputByMesa((current) => ({
+                        ...current,
+                        [mesa]: event.target.value.replace(/\D/g, '').slice(0, 4),
+                      }))
+                    }
+                    className="w-32 rounded-lg border border-[#3b5c73] bg-[#0b1d2b] px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-[#ff7e38]"
+                    placeholder="0000"
+                  />
+                </label>
+
+                <button
+                  type="button"
+                  onClick={() => unlockMesaWithPin(mesa)}
+                  className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-emerald-950 transition hover:bg-emerald-400"
+                >
+                  Liberar Mesa
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {blockedByEtapa ? (
           <p className="rounded-xl border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
             Registros bloqueados para a Mesa {mesa}. Esta etapa está {selectedEtapa?.status ?? 'sem status'}.
+          </p>
+        ) : null}
+
+        {blockedByPin ? (
+          <p className="rounded-xl border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+            Registros da Mesa {mesa} bloqueados até validação do PIN do mesário.
           </p>
         ) : null}
 
@@ -1123,7 +1313,7 @@ export default function DiaDePoker() {
 
       <div className="rounded-2xl border border-[#2d4659]/70 bg-[#0d2431]/80 p-3 shadow-[0_14px_34px_rgba(0,0,0,0.35)]">
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {(Object.keys(TAB_LABELS) as TabKey[]).map((tabKey) => (
+          {visibleTabs.map((tabKey) => (
             <button
               key={tabKey}
               type="button"
@@ -1155,7 +1345,7 @@ export default function DiaDePoker() {
           : 'nenhuma'}
       </div>
 
-      {tab === 'admin' ? renderAdminTab() : null}
+      {canViewAdminTab && tab === 'admin' ? renderAdminTab() : null}
       {activeMesa === 1 ? renderMesaTab(1) : null}
       {activeMesa === 2 ? renderMesaTab(2) : null}
       {activeMesa === 3 ? renderMesaTab(3) : null}
