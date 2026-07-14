@@ -59,6 +59,7 @@ const TAB_LABELS: Record<TabKey, string> = {
 
 const PUBLIC_TABS: TabKey[] = ['mesa1', 'mesa2', 'mesa3'];
 const ADMIN_TABS: TabKey[] = ['admin', 'mesa1', 'mesa2', 'mesa3'];
+const ENABLE_SPEECH_TO_TEXT = false;
 
 const EMPTY_MESAS: MesaRowsState = {
   1: [],
@@ -276,7 +277,7 @@ export default function DiaDePoker() {
   useEffect(() => {
     mountedRef.current = true;
 
-    const hasSupport = typeof window !== 'undefined' && (
+      const hasSupport = ENABLE_SPEECH_TO_TEXT && typeof window !== 'undefined' && (
       typeof (window as unknown as { SpeechRecognition?: RecognitionCtor }).SpeechRecognition !== 'undefined' ||
       typeof (window as unknown as { webkitSpeechRecognition?: RecognitionCtor }).webkitSpeechRecognition !== 'undefined'
     );
@@ -944,45 +945,6 @@ export default function DiaDePoker() {
 
     const etapaIdNum = Number(selectedEtapaId);
 
-    const { data: tempRows, error: tempError } = await supabase
-      .from('registros_mesas_temp')
-      .select('etapa_id, jogador_id, numero_mesa, rebuys, fez_addon')
-      .eq('etapa_id', etapaIdNum);
-
-    if (tempError) {
-      setError(`Erro ao ler registros temporários da etapa: ${tempError.message}`);
-      setIsSaving(false);
-      return;
-    }
-
-    const migracaoPayload = (tempRows ?? []).map((row) => ({
-      etapa_id: row.etapa_id,
-      jogador_id: row.jogador_id,
-      tipo_participante: 'jogador' as const,
-      rebuys: Math.max(0, Number(row.rebuys ?? 0)),
-      fez_addon: Boolean(row.fez_addon),
-    }));
-
-    if (migracaoPayload.length > 0) {
-      const { error: upsertFinalError } = await supabase
-        .from('registros_etapa')
-        .upsert(migracaoPayload, { onConflict: 'etapa_id,jogador_id' });
-
-      if (upsertFinalError) {
-        setError(`Erro ao migrar dados para registros_etapa: ${upsertFinalError.message}`);
-        setIsSaving(false);
-        return;
-      }
-    }
-
-    const { error: deleteTempError } = await supabase.from('registros_mesas_temp').delete().eq('etapa_id', etapaIdNum);
-
-    if (deleteTempError) {
-      setError(`Erro ao limpar registros temporários: ${deleteTempError.message}`);
-      setIsSaving(false);
-      return;
-    }
-
     const { error: updateEtapaError } = await supabase.from('etapas').update({ status: 'finalizada' }).eq('id', etapaIdNum);
 
     if (updateEtapaError) {
@@ -997,8 +959,7 @@ export default function DiaDePoker() {
     recognitionRef.current?.stop();
 
     await refreshEtapas();
-    setMesas(emptyMesasState());
-    setMessage('Etapa finalizada. Dados migrados para registros_etapa e temporários removidos.');
+    setMessage('Etapa finalizada. Registros temporários mantidos para pré-preenchimento na tela de Resultados.');
     setIsSaving(false);
   };
 
@@ -1044,8 +1005,10 @@ export default function DiaDePoker() {
         </div>
 
         <p className="rounded-xl border border-[#264458] bg-[#0a1c2a] px-3 py-2 text-xs text-slate-300">
-          Ao finalizar, os dados de <span className="font-semibold text-slate-100">registros_mesas_temp</span> serão
-          migrados para <span className="font-semibold text-slate-100">registros_etapa</span> e os temporários removidos.
+          Ao finalizar, os dados de <span className="font-semibold text-slate-100">registros_mesas_temp</span> ficam
+          disponíveis para pré-preenchimento em <span className="font-semibold text-slate-100">Resultados</span>. O
+          salvamento oficial em <span className="font-semibold text-slate-100">registros_etapa</span> ocorre apenas na
+          tela de Resultados.
         </p>
 
         {selectedEtapa?.status === 'em_andamento' ? (
@@ -1073,37 +1036,39 @@ export default function DiaDePoker() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-slate-100">Mesa {mesa} - Tela do Mesário</h2>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={() => toggleMesaVoice(mesa)}
-              disabled={!speechSupported || blocked}
-              className={[
-                'rounded-xl px-4 py-2 text-sm font-semibold transition',
-                listeningMesa === mesa
-                  ? 'bg-rose-500 text-white hover:bg-rose-400'
-                  : 'bg-[#1b3e52] text-slate-100 hover:bg-[#255773]',
-                (!speechSupported || blocked) && 'cursor-not-allowed opacity-50',
-              ].join(' ')}
-            >
-              {listeningMesa === mesa ? 'Parar Microfone' : 'Ativar Microfone'}
-            </button>
+          {ENABLE_SPEECH_TO_TEXT ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => toggleMesaVoice(mesa)}
+                disabled={!speechSupported || blocked}
+                className={[
+                  'rounded-xl px-4 py-2 text-sm font-semibold transition',
+                  listeningMesa === mesa
+                    ? 'bg-rose-500 text-white hover:bg-rose-400'
+                    : 'bg-[#1b3e52] text-slate-100 hover:bg-[#255773]',
+                  (!speechSupported || blocked) && 'cursor-not-allowed opacity-50',
+                ].join(' ')}
+              >
+                {listeningMesa === mesa ? 'Parar Microfone' : 'Ativar Microfone'}
+              </button>
 
-            {listeningMesa === mesa ? (
-              <span className="animate-pulse rounded-lg border border-rose-300/40 bg-rose-500/20 px-3 py-1 text-xs font-semibold text-rose-200">
-                🎙️ Ouvindo Mesa {mesa}...
-              </span>
-            ) : null}
-          </div>
+              {listeningMesa === mesa ? (
+                <span className="animate-pulse rounded-lg border border-rose-300/40 bg-rose-500/20 px-3 py-1 text-xs font-semibold text-rose-200">
+                  🎙️ Ouvindo Mesa {mesa}...
+                </span>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
-        {!speechSupported ? (
+        {ENABLE_SPEECH_TO_TEXT && !speechSupported ? (
           <p className="rounded-xl border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
             Seu navegador não possui suporte para Web Speech API.
           </p>
         ) : null}
 
-        {speechSupported ? (
+        {ENABLE_SPEECH_TO_TEXT && speechSupported ? (
           <p className="rounded-xl border border-[#2c4e65] bg-[#0a1f2d] px-3 py-2 text-sm text-slate-300">
             <span className="font-semibold text-slate-100">Último áudio reconhecido:</span>{' '}
             {lastVoiceTextByMesa[mesa] ? `"${lastVoiceTextByMesa[mesa]}"` : 'aguardando fala...'}

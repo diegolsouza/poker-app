@@ -23,6 +23,12 @@ type PreJogoEtapaRow = {
   participant_ids: number[] | null;
 };
 
+type RegistroMesaTempRow = {
+  jogador_id: number;
+  rebuys: number | null;
+  fez_addon: boolean | null;
+};
+
 type RegistroFormRow = {
   id: string;
   jogadorId: string;
@@ -402,6 +408,42 @@ export default function RegistroResultados() {
       if (!etapaId || jogadores.length === 0) {
         setRows([createEmptyRow()]);
         return;
+      }
+
+      const { data: tempRowsData, error: tempRowsError } = await supabase
+        .from('registros_mesas_temp')
+        .select('jogador_id, rebuys, fez_addon')
+        .eq('etapa_id', Number(etapaId));
+
+      if (tempRowsError) {
+        setError(`Não foi possível carregar pré-registros das mesas para esta etapa: ${tempRowsError.message}`);
+        setRows([createEmptyRow()]);
+        return;
+      }
+
+      const tempRows = (tempRowsData ?? []) as RegistroMesaTempRow[];
+      if (tempRows.length > 0) {
+        const activeJogadoresSet = new Set(jogadores.map((jogador) => jogador.id));
+        const uniqueByJogador = new Map<number, RegistroMesaTempRow>();
+
+        tempRows.forEach((row) => {
+          if (activeJogadoresSet.has(row.jogador_id)) {
+            uniqueByJogador.set(row.jogador_id, row);
+          }
+        });
+
+        const preloadedRows = Array.from(uniqueByJogador.values()).map((row) => ({
+          ...createFilledRow(String(row.jogador_id)),
+          rebuys: String(Math.max(0, Number(row.rebuys ?? 0))),
+          fezAddon: Boolean(row.fez_addon),
+        }));
+
+        if (preloadedRows.length > 0) {
+          setRows(ensureTrailingEmptyRow(preloadedRows));
+          setSuccess(`Lista pré-carregada com ${preloadedRows.length} participante(s) das mesas.`);
+          setError(null);
+          return;
+        }
       }
 
       const { data, error: preJogoError } = await supabase
