@@ -591,8 +591,8 @@ export default function DiaDePoker() {
     const transcript = normalizeText(rawText);
     if (!transcript) return;
 
-    const rebuyMatch = transcript.match(/\b(rebuy|rebuys|recompr[ao]|recompro)\b/);
-    const addonMatch = transcript.match(/\b(addon|add on|add-on)\b/);
+    const rebuyMatch = transcript.match(/\b(comprou|compro[u]?|recompr[ao]|recompro)\b/);
+    const addonMatch = transcript.match(/\b(adicionou|adiciono[u]?|adicionado)\b/);
 
     if (!rebuyMatch && !addonMatch) return;
 
