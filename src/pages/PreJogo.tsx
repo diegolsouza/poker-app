@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import supabase from '../supabaseClient';
 import { isAdminAuthenticated } from '../utils/adminAuth';
+import logo from '../assets/logo.png';
 
 type Etapa = {
   id: number;
@@ -483,13 +484,40 @@ export default function PreJogo() {
     return `${etapa.codigo_etapa}-${data}`.replace(/\//g, '-');
   }, [etapaId, etapas]);
 
-  const openPrintWindow = (title: string, htmlBody: string, style: string) => {
+  const openPrintWindow = async (title: string, htmlBody: string, style: string) => {
+    const waitForAssets = async (doc: Document) => {
+      const pendingImages = Array.from(doc.images).filter((img) => !img.complete);
+
+      if (pendingImages.length > 0) {
+        await Promise.all(
+          pendingImages.map(
+            (img) =>
+              new Promise<void>((resolve) => {
+                img.addEventListener('load', () => resolve(), { once: true });
+                img.addEventListener('error', () => resolve(), { once: true });
+              }),
+          ),
+        );
+      }
+
+      if ('fonts' in doc) {
+        const fontsDoc = doc as Document & { fonts: { ready: Promise<unknown> } };
+        await fontsDoc.fonts.ready.catch(() => undefined);
+      }
+
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      });
+    };
+
     const printFrame = document.createElement('iframe');
     printFrame.style.position = 'fixed';
     printFrame.style.right = '0';
     printFrame.style.bottom = '0';
-    printFrame.style.width = '0';
-    printFrame.style.height = '0';
+    printFrame.style.width = '1px';
+    printFrame.style.height = '1px';
+    printFrame.style.opacity = '0';
+    printFrame.style.pointerEvents = 'none';
     printFrame.style.border = '0';
     document.body.appendChild(printFrame);
 
@@ -511,16 +539,31 @@ export default function PreJogo() {
     `);
     doc.close();
 
-    window.setTimeout(() => {
-      printFrame.contentWindow?.focus();
-      printFrame.contentWindow?.print();
-      window.setTimeout(() => {
-        document.body.removeChild(printFrame);
-      }, 1500);
-    }, 200);
+    await waitForAssets(doc);
+
+    const frameWindow = printFrame.contentWindow;
+    if (!frameWindow) {
+      document.body.removeChild(printFrame);
+      throw new Error('Janela de impressão indisponível.');
+    }
+
+    let removed = false;
+    const cleanup = () => {
+      if (removed) return;
+      removed = true;
+      if (printFrame.parentNode) {
+        printFrame.parentNode.removeChild(printFrame);
+      }
+    };
+
+    frameWindow.onafterprint = cleanup;
+    frameWindow.focus();
+    frameWindow.print();
+
+    window.setTimeout(cleanup, 30000);
   };
 
-  const handleImprimirFichaMesa = () => {
+  const handleImprimirFichaMesa = async () => {
     setError(null);
     setSuccess(null);
 
@@ -530,7 +573,7 @@ export default function PreJogo() {
     }
 
     const etapaLabel = etapaSelecionadaLabel;
-    const logoUrl = `${window.location.origin}/logo.png`;
+    const logoUrl = logo;
     const pagesHtml = sorteio.tables
       .map((table, tableIndex) => {
         const rowsHtml = Array.from({ length: 9 }, (_, seatIndex) => {
@@ -601,7 +644,7 @@ export default function PreJogo() {
       .join('');
 
     try {
-      openPrintWindow(
+      await openPrintWindow(
         `Fichas de Mesa - ${etapaLabel}`,
         pagesHtml,
         '@page { size: A4 landscape; margin: 10mm; } * { box-sizing: border-box; } body { margin: 0; font-family: Arial, sans-serif; color: #111; } .print-page { page-break-after: always; min-height: 180mm; } .print-page:last-child { page-break-after: auto; } .header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 8px; } .brand { display: flex; align-items: center; gap: 10px; } .brand img { width: 44px; height: auto; object-fit: contain; } h1 { margin: 0 0 4px 0; font-size: 16px; } p { margin: 2px 0; font-size: 10px; } .meta { text-align: right; } table { width: 100%; border-collapse: collapse; table-layout: fixed; } th, td { border: 1px solid #333; padding: 3px; font-size: 9px; text-align: center; height: 24px; vertical-align: middle; } th { background: #f0f0f0; font-size: 8px; } .num-col { width: 30px; font-weight: 700; } .mark-col { width: 34px; } .name-col { width: 220px; text-align: left; font-weight: 700; } .rebuy-col { width: 220px; } .money-col { width: 78px; } .place-col { width: 58px; } .circle { display: inline-block; width: 13px; height: 13px; border: 1.5px solid #111; border-radius: 999px; } .circle.small { width: 11px; height: 11px; } .rebuy-grid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 2px; align-items: center; }',
