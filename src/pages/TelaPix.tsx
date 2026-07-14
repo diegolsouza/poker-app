@@ -525,6 +525,66 @@ export default function TelaPix() {
               <p className="text-[11px] text-slate-400">Rateio Janta</p>
               <p className="text-sm font-semibold text-slate-100">{formatCurrency(calculos.rateioJantaPorPessoa)}</p>
             </article>
+
+            <article className="col-span-2 rounded-lg border border-[#244357] bg-[#0b1a25] p-2">
+              <button
+                type="button"
+                onClick={() => setIsContaEtapaExpanded((current) => !current)}
+                className="flex w-full items-center justify-between text-left"
+                aria-expanded={isContaEtapaExpanded}
+              >
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-[#ff9a63]">🧾 Conta da Etapa</p>
+                <span className="text-[11px] font-semibold text-slate-300">
+                  {isContaEtapaExpanded ? 'Fechar ▲' : 'Abrir ▼'}
+                </span>
+              </button>
+
+              {!isContaEtapaExpanded ? (
+                <div className="mt-2 space-y-1 text-[11px] text-slate-300">
+                  <p>Total entradas: {formatCurrency(calculos.totalEntradasEtapa)}</p>
+                  <p>Total saídas: {formatCurrency(calculos.totalSaidasEtapa)}</p>
+                  <p className="text-[10px] text-slate-400">Toque para detalhar e conferir fechamento.</p>
+                </div>
+              ) : (
+                <>
+                  <div className="mt-2 space-y-1 text-[11px] text-slate-300">
+                    <p className="font-semibold text-emerald-300">Entradas</p>
+                    <p>Buy-in: {formatCurrency(calculos.totalEntradasBuyIn)}</p>
+                    <p>Rebuy: {formatCurrency(calculos.totalEntradasRebuy)}</p>
+                    <p>Add-on: {formatCurrency(calculos.totalEntradasAddon)}</p>
+                    <p>Rateio salão (recebido): {formatCurrency(calculos.totalEntradasRateioSalao)}</p>
+                    <p>Rateio janta (recebido): {formatCurrency(calculos.totalEntradasRateioJanta)}</p>
+                    <p className="font-semibold text-emerald-200">Total entradas: {formatCurrency(calculos.totalEntradasEtapa)}</p>
+                  </div>
+
+                  <div className="mt-2 space-y-1 text-[11px] text-slate-300">
+                    <p className="font-semibold text-rose-300">Saídas</p>
+                    <p>Janta: {formatCurrency(calculos.totalSaidasJanta)}</p>
+                    <p>Salão: {formatCurrency(calculos.totalSaidasSalao)}</p>
+                    <p>Premiações da rodada: {formatCurrency(calculos.totalSaidasPremiacaoRodada)}</p>
+                    <p className="font-semibold text-rose-200">Total saídas: {formatCurrency(calculos.totalSaidasEtapa)}</p>
+                  </div>
+
+                  <div className="mt-2 space-y-1 text-[11px] text-slate-300">
+                    <p className="font-semibold text-slate-100">Conferência</p>
+                    <p>Saldo após entradas e saídas: {formatCurrency(calculos.saldoContaEtapa)}</p>
+                    <p>Reserva esperada (Final + Caixinha): {formatCurrency(calculos.reservaEsperadaAcumulados)}</p>
+                    <p className={`font-semibold ${contaEtapaFechou ? 'text-emerald-300' : 'text-rose-300'}`}>
+                      Status: {contaEtapaFechou ? 'FECHOU' : 'NÃO FECHOU'}
+                    </p>
+                    <p
+                      className={`font-semibold ${
+                        Math.abs(calculos.diferencaConferencia) < 0.01 ? 'text-emerald-300' : 'text-amber-300'
+                      }`}
+                    >
+                      Diferença: {formatCurrency(calculos.diferencaConferencia)}
+                    </p>
+                  </div>
+
+                  <p className="mt-2 text-[10px] text-slate-400">Custos Extras ficam fora da conta da etapa e saem da Caixinha do Grupo.</p>
+                </>
+              )}
+            </article>
           </div>
 
           <div className="hidden gap-3 md:grid md:grid-cols-2 xl:grid-cols-4">

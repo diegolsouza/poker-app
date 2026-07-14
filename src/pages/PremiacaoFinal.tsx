@@ -32,6 +32,7 @@ type RegistroEtapa = {
   colocacao: number | null;
   rebuys: number | null;
   melhor_mao: boolean;
+  outros_custos: number | null;
 };
 
 type RankingRow = {
@@ -55,6 +56,13 @@ type ResumoEtapaRow = {
   inscricoes: number;
   arrecadadoFinal: number;
   arrecadadoCaixinha: number;
+};
+
+type SaidaCaixinhaRow = {
+  etapaId: number;
+  etapaCodigo: string;
+  nomeJogador: string;
+  valor: number;
 };
 
 const PROJECAO_PERCENTUAIS: Array<{ colocacao: 1 | 2 | 3 | 4 | 5; percentual: number }> = [
@@ -186,7 +194,7 @@ export default function PremiacaoFinal() {
 
       const { data: registrosData, error: registrosError } = await supabase
         .from('registros_etapa')
-        .select('etapa_id, jogador_id, tipo_participante, colocacao, rebuys, melhor_mao')
+        .select('etapa_id, jogador_id, tipo_participante, colocacao, rebuys, melhor_mao, outros_custos')
         .in('etapa_id', etapaIds);
 
       if (registrosError) {
@@ -281,14 +289,43 @@ export default function PremiacaoFinal() {
       };
     });
 
+    const etapaCodigoMap = new Map<number, string>();
+    etapas.forEach((etapa) => {
+      etapaCodigoMap.set(etapa.id, etapa.codigo_etapa);
+    });
+
+    const saidasCaixinha: SaidaCaixinhaRow[] = registros
+      .filter((registro) => Number(registro.outros_custos ?? 0) > 0)
+      .map((registro) => ({
+        etapaId: registro.etapa_id,
+        etapaCodigo: etapaCodigoMap.get(registro.etapa_id) ?? `Etapa #${registro.etapa_id}`,
+        nomeJogador: jogadoresMap[registro.jogador_id] ?? `Jogador #${registro.jogador_id}`,
+        valor: Number(registro.outros_custos ?? 0),
+      }))
+      .sort((a, b) => {
+        if (a.etapaCodigo !== b.etapaCodigo) {
+          return a.etapaCodigo.localeCompare(b.etapaCodigo, 'pt-BR');
+        }
+
+        if (b.valor !== a.valor) {
+          return b.valor - a.valor;
+        }
+
+        return a.nomeJogador.localeCompare(b.nomeJogador, 'pt-BR');
+      });
+
+    const totalSaidasCaixinha = saidasCaixinha.reduce((sum, item) => sum + item.valor, 0);
+
     return {
       totalInscricoes,
       totalPremiacaoFinal,
       totalCaixinha,
+      totalSaidasCaixinha,
       projecaoPagamentos,
       resumoPorEtapa,
+      saidasCaixinha,
     };
-  }, [etapas, ranking, registros]);
+  }, [etapas, jogadoresMap, ranking, registros]);
 
   const carregando = isLoadingBase || isLoadingDados;
 
@@ -325,7 +362,7 @@ export default function PremiacaoFinal() {
 
       {error ? <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</p> : null}
 
-      <section className="grid gap-4 md:grid-cols-3">
+      <section className="grid gap-4 md:grid-cols-4">
         <article className="rounded-2xl border border-[#2f5f4f] bg-[#0b1a25] p-5 shadow-[0_12px_28px_rgba(2,6,23,0.3)]">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-300">Premiação Final</p>
           <p className="mt-2 text-3xl font-bold text-emerald-200">{formatCurrency(resumo.totalPremiacaoFinal)}</p>
@@ -342,6 +379,12 @@ export default function PremiacaoFinal() {
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">Inscrições / Buy-ins</p>
           <p className="mt-2 text-3xl font-bold text-slate-100">{resumo.totalInscricoes}</p>
           <p className="mt-2 text-sm text-slate-300">Total de participações de jogadores na temporada.</p>
+        </article>
+
+        <article className="rounded-2xl border border-[#5b3a3a] bg-[#0b1a25] p-5 shadow-[0_12px_28px_rgba(2,6,23,0.3)]">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-rose-300">Saídas da Caixinha</p>
+          <p className="mt-2 text-3xl font-bold text-rose-200">{formatCurrency(resumo.totalSaidasCaixinha)}</p>
+          <p className="mt-2 text-sm text-slate-300">Total usado para cobrir Outros Custos.</p>
         </article>
       </section>
 
@@ -466,6 +509,59 @@ export default function PremiacaoFinal() {
             </table>
           </div>
         </article>
+      </section>
+
+      <section className="rounded-2xl border border-[#244357] bg-[#081723]/92 shadow-[0_18px_45px_rgba(3,8,14,0.42)]">
+        <header className="border-b border-[#244357] px-4 py-3 sm:px-6">
+          <h2 className="text-lg font-semibold text-slate-50">Saídas da Caixinha por Outros Custos</h2>
+          <p className="mt-1 text-sm text-slate-300">Detalhamento por etapa e jogador (Etapa, Nome e Valor).</p>
+        </header>
+
+        <div className="space-y-2 p-4 md:hidden">
+          {resumo.saidasCaixinha.length === 0 ? (
+            <p className="rounded-xl border border-[#244357] bg-[#0b1a25] px-3 py-4 text-center text-sm text-slate-400">
+              Nenhuma saída da caixinha registrada nesta temporada.
+            </p>
+          ) : (
+            resumo.saidasCaixinha.map((item) => (
+              <article key={`${item.etapaId}-${item.nomeJogador}-${item.valor}`} className="rounded-xl border border-[#244357] bg-[#0b1a25] p-3">
+                <p className="text-xs text-slate-400">{item.etapaCodigo}</p>
+                <p className="mt-1 text-sm font-semibold text-slate-100">{item.nomeJogador}</p>
+                <p className="mt-1 text-sm font-semibold text-rose-300">{formatCurrency(item.valor)}</p>
+              </article>
+            ))
+          )}
+        </div>
+
+        <div className="hidden overflow-x-auto md:block">
+          <table className="w-full min-w-[600px] border-collapse text-sm">
+            <thead className="bg-[#0f2230] text-slate-200">
+              <tr>
+                <th className="px-3 py-3 text-left font-semibold">Etapa</th>
+                <th className="px-3 py-3 text-left font-semibold">Nome</th>
+                <th className="px-3 py-3 text-right font-semibold">Valor</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {resumo.saidasCaixinha.length === 0 ? (
+                <tr>
+                  <td colSpan={3} className="px-3 py-8 text-center text-slate-400">
+                    Nenhuma saída da caixinha registrada nesta temporada.
+                  </td>
+                </tr>
+              ) : (
+                resumo.saidasCaixinha.map((item) => (
+                  <tr key={`${item.etapaId}-${item.nomeJogador}-${item.valor}`} className="border-t border-[#1f3b4d] text-slate-200">
+                    <td className="px-3 py-3 font-medium text-slate-100">{item.etapaCodigo}</td>
+                    <td className="px-3 py-3">{item.nomeJogador}</td>
+                    <td className="px-3 py-3 text-right font-semibold text-rose-300">{formatCurrency(item.valor)}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </section>
     </main>
   );
