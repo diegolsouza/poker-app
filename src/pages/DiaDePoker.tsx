@@ -4,7 +4,8 @@ import supabase from '../supabaseClient';
 import { isAdminAuthenticated } from '../utils/adminAuth';
 
 type EtapaStatus = 'pendente' | 'em_andamento' | 'finalizada';
-type TabKey = 'admin' | 'mesa1' | 'mesa2' | 'mesa3';
+type TabKey = 'admin' | 'mesa1' | 'mesa2' | 'mesa3' | 'mesaFinal';
+type MesaId = 1 | 2 | 3 | 4;
 
 type Etapa = {
   id: number;
@@ -24,6 +25,7 @@ type RegistroMesaTemp = {
   numero_mesa: number;
   rebuys: number | null;
   fez_addon: boolean | null;
+  colocacao_final: number | null;
 };
 
 type MesaPlayerRow = {
@@ -31,11 +33,12 @@ type MesaPlayerRow = {
   nome: string;
   rebuys: number;
   fezAddon: boolean;
+  colocacaoFinal: number | null;
 };
 
-type MesaRowsState = Record<1 | 2 | 3, MesaPlayerRow[]>;
+type MesaRowsState = Record<MesaId, MesaPlayerRow[]>;
 
-type MesaPinState = Record<1 | 2 | 3, string>;
+type MesaPinState = Record<MesaId, string>;
 
 type RecognitionLike = {
   lang: string;
@@ -55,16 +58,19 @@ const TAB_LABELS: Record<TabKey, string> = {
   mesa1: 'Mesa 1',
   mesa2: 'Mesa 2',
   mesa3: 'Mesa 3',
+  mesaFinal: 'Mesa Final',
 };
 
-const PUBLIC_TABS: TabKey[] = ['mesa1', 'mesa2', 'mesa3'];
-const ADMIN_TABS: TabKey[] = ['admin', 'mesa1', 'mesa2', 'mesa3'];
+const PUBLIC_TABS: TabKey[] = ['mesa1', 'mesa2', 'mesa3', 'mesaFinal'];
+const ADMIN_TABS: TabKey[] = ['admin', 'mesa1', 'mesa2', 'mesa3', 'mesaFinal'];
+const ALL_MESAS: MesaId[] = [1, 2, 3, 4];
 const ENABLE_SPEECH_TO_TEXT = false;
 
 const EMPTY_MESAS: MesaRowsState = {
   1: [],
   2: [],
   3: [],
+  4: [],
 };
 
 function normalizeText(value: string): string {
@@ -90,13 +96,15 @@ function emptyMesasState(): MesaRowsState {
     1: [],
     2: [],
     3: [],
+    4: [],
   };
 }
 
-function parseMesaFromTab(tab: TabKey): 1 | 2 | 3 | null {
+function parseMesaFromTab(tab: TabKey): MesaId | null {
   if (tab === 'mesa1') return 1;
   if (tab === 'mesa2') return 2;
   if (tab === 'mesa3') return 3;
+  if (tab === 'mesaFinal') return 4;
   return null;
 }
 
@@ -106,10 +114,11 @@ function buildMesasFromSources(
   tempRows: RegistroMesaTemp[],
 ): MesaRowsState {
   const base = emptyMesasState();
-  const seenByMesa: Record<1 | 2 | 3, Set<number>> = {
+  const seenByMesa: Record<MesaId, Set<number>> = {
     1: new Set<number>(),
     2: new Set<number>(),
     3: new Set<number>(),
+    4: new Set<number>(),
   };
 
   preJogoTables.slice(0, 3).forEach((table, index) => {
@@ -125,6 +134,7 @@ function buildMesasFromSources(
         nome: jogador.nome,
         rebuys: 0,
         fezAddon: false,
+        colocacaoFinal: null,
       });
 
       seenByMesa[mesa].add(jogadorId);
@@ -132,8 +142,8 @@ function buildMesasFromSources(
   });
 
   tempRows.forEach((row) => {
-    if (row.numero_mesa < 1 || row.numero_mesa > 3) return;
-    const mesa = row.numero_mesa as 1 | 2 | 3;
+    if (row.numero_mesa < 1 || row.numero_mesa > 4) return;
+    const mesa = row.numero_mesa as MesaId;
     const jogador = jogadoresMap.get(row.jogador_id);
     if (!jogador) return;
 
@@ -141,6 +151,7 @@ function buildMesasFromSources(
     if (existing) {
       existing.rebuys = Math.max(0, Number(row.rebuys ?? 0));
       existing.fezAddon = Boolean(row.fez_addon);
+      existing.colocacaoFinal = row.colocacao_final ?? null;
       return;
     }
 
@@ -149,6 +160,7 @@ function buildMesasFromSources(
       nome: jogador.nome,
       rebuys: Math.max(0, Number(row.rebuys ?? 0)),
       fezAddon: Boolean(row.fez_addon),
+      colocacaoFinal: row.colocacao_final ?? null,
     });
   });
 
@@ -156,6 +168,7 @@ function buildMesasFromSources(
     1: [...base[1]].sort((a, b) => a.nome.localeCompare(b.nome)),
     2: [...base[2]].sort((a, b) => a.nome.localeCompare(b.nome)),
     3: [...base[3]].sort((a, b) => a.nome.localeCompare(b.nome)),
+    4: [...base[4]].sort((a, b) => a.nome.localeCompare(b.nome)),
   };
 }
 
@@ -169,28 +182,31 @@ export default function DiaDePoker() {
   const [jogadores, setJogadores] = useState<Jogador[]>([]);
   const [selectedEtapaId, setSelectedEtapaId] = useState<string>('');
   const [mesas, setMesas] = useState<MesaRowsState>(EMPTY_MESAS);
-  const [novoJogadorByMesa, setNovoJogadorByMesa] = useState<Record<1 | 2 | 3, string>>({
+  const [novoJogadorByMesa, setNovoJogadorByMesa] = useState<Record<MesaId, string>>({
     1: '',
     2: '',
     3: '',
+    4: '',
   });
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [speechSupported, setSpeechSupported] = useState<boolean>(false);
-  const [listeningMesa, setListeningMesa] = useState<1 | 2 | 3 | null>(null);
-  const [mesaPins, setMesaPins] = useState<MesaPinState>({ 1: '', 2: '', 3: '' });
-  const [pinInputByMesa, setPinInputByMesa] = useState<MesaPinState>({ 1: '', 2: '', 3: '' });
-  const [mesaUnlocked, setMesaUnlocked] = useState<Record<1 | 2 | 3, boolean>>({
+  const [listeningMesa, setListeningMesa] = useState<MesaId | null>(null);
+  const [mesaPins, setMesaPins] = useState<MesaPinState>({ 1: '', 2: '', 3: '', 4: '' });
+  const [pinInputByMesa, setPinInputByMesa] = useState<MesaPinState>({ 1: '', 2: '', 3: '', 4: '' });
+  const [mesaUnlocked, setMesaUnlocked] = useState<Record<MesaId, boolean>>({
     1: false,
     2: false,
     3: false,
+    4: false,
   });
-  const [lastVoiceTextByMesa, setLastVoiceTextByMesa] = useState<Record<1 | 2 | 3, string>>({
+  const [lastVoiceTextByMesa, setLastVoiceTextByMesa] = useState<Record<MesaId, string>>({
     1: '',
     2: '',
     3: '',
+    4: '',
   });
   const [flashByMesa, setFlashByMesa] = useState<Record<number, number | null>>({
     1: null,
@@ -200,7 +216,7 @@ export default function DiaDePoker() {
 
   const recognitionRef = useRef<RecognitionLike | null>(null);
   const keepListeningRef = useRef<boolean>(false);
-  const activeMesaRef = useRef<1 | 2 | 3 | null>(null);
+  const activeMesaRef = useRef<MesaId | null>(null);
   const mountedRef = useRef<boolean>(true);
   const mesasRef = useRef<MesaRowsState>(EMPTY_MESAS);
   const selectedEtapaRef = useRef<Etapa | null>(null);
@@ -225,10 +241,10 @@ export default function DiaDePoker() {
   }, [jogadores]);
 
   const jogadorMesaAtualMap = useMemo(() => {
-    const map = new Map<number, 1 | 2 | 3>();
+    const map = new Map<number, MesaId>();
 
-    (Object.keys(mesas) as Array<'1' | '2' | '3'>).forEach((mesaKey) => {
-      const mesa = Number(mesaKey) as 1 | 2 | 3;
+    (Object.keys(mesas) as Array<'1' | '2' | '3' | '4'>).forEach((mesaKey) => {
+      const mesa = Number(mesaKey) as MesaId;
       mesas[mesa].forEach((row) => {
         map.set(row.jogadorId, mesa);
       });
@@ -289,8 +305,8 @@ export default function DiaDePoker() {
       keepListeningRef.current = false;
       recognitionRef.current?.stop();
 
-      (Object.keys(flashTimersRef.current) as Array<'1' | '2' | '3'>).forEach((mesaKey) => {
-        const mesa = Number(mesaKey) as 1 | 2 | 3;
+      (Object.keys(flashTimersRef.current) as Array<'1' | '2' | '3' | '4'>).forEach((mesaKey) => {
+        const mesa = Number(mesaKey) as MesaId;
         const timer = flashTimersRef.current[mesa];
         if (timer) {
           clearTimeout(timer);
@@ -358,9 +374,9 @@ export default function DiaDePoker() {
 
       if (!selectedEtapaId) {
         setMesas(emptyMesasState());
-        setMesaPins({ 1: '', 2: '', 3: '' });
-        setMesaUnlocked({ 1: false, 2: false, 3: false });
-        setPinInputByMesa({ 1: '', 2: '', 3: '' });
+        setMesaPins({ 1: '', 2: '', 3: '', 4: '' });
+        setMesaUnlocked({ 1: false, 2: false, 3: false, 4: false });
+        setPinInputByMesa({ 1: '', 2: '', 3: '', 4: '' });
         return;
       }
 
@@ -370,7 +386,7 @@ export default function DiaDePoker() {
         supabase.from('pre_jogo_etapa').select('tables_json').eq('etapa_id', etapaIdNum).maybeSingle(),
         supabase
           .from('registros_mesas_temp')
-          .select('etapa_id, jogador_id, numero_mesa, rebuys, fez_addon')
+          .select('etapa_id, jogador_id, numero_mesa, rebuys, fez_addon, colocacao_final')
           .eq('etapa_id', etapaIdNum),
         supabase.from('etapa_mesa_pins').select('numero_mesa, pin_codigo').eq('etapa_id', etapaIdNum),
       ]);
@@ -397,23 +413,23 @@ export default function DiaDePoker() {
       const tempRows = (tempResp.data ?? []) as RegistroMesaTemp[];
       setMesas(buildMesasFromSources(jogadoresMap, tables, tempRows));
 
-      const loadedPins: MesaPinState = { 1: '', 2: '', 3: '' };
+      const loadedPins: MesaPinState = { 1: '', 2: '', 3: '', 4: '' };
       (pinsResp.data ?? []).forEach((row: any) => {
-        const mesa = Number(row.numero_mesa) as 1 | 2 | 3;
-        if (mesa < 1 || mesa > 3) return;
+        const mesa = Number(row.numero_mesa) as MesaId;
+        if (mesa < 1 || mesa > 4) return;
         loadedPins[mesa] = String(row.pin_codigo ?? '');
       });
 
       setMesaPins(loadedPins);
-      setPinInputByMesa({ 1: '', 2: '', 3: '' });
+      setPinInputByMesa({ 1: '', 2: '', 3: '', 4: '' });
 
       if (canViewAdminTab) {
-        setMesaUnlocked({ 1: true, 2: true, 3: true });
+        setMesaUnlocked({ 1: true, 2: true, 3: true, 4: true });
       } else {
         const etapaKey = String(etapaIdNum);
-        const unlockState: Record<1 | 2 | 3, boolean> = { 1: false, 2: false, 3: false };
+        const unlockState: Record<MesaId, boolean> = { 1: false, 2: false, 3: false, 4: false };
 
-        ([1, 2, 3] as Array<1 | 2 | 3>).forEach((mesa) => {
+        ALL_MESAS.forEach((mesa) => {
           const key = `poker_mesa_unlock:${etapaKey}:${mesa}`;
           unlockState[mesa] = sessionStorage.getItem(key) === '1';
         });
@@ -427,7 +443,7 @@ export default function DiaDePoker() {
 
   const generateMesaPin = (): string => String(1000 + Math.floor(Math.random() * 9000));
 
-  const unlockMesaWithPin = (mesa: 1 | 2 | 3) => {
+  const unlockMesaWithPin = (mesa: MesaId) => {
     if (!selectedEtapaId) {
       setError('Selecione uma etapa válida para liberar a mesa.');
       return;
@@ -462,9 +478,10 @@ export default function DiaDePoker() {
   const upsertMesaRegistro = async (
     etapaId: number,
     jogadorId: number,
-    numeroMesa: 1 | 2 | 3,
+    numeroMesa: MesaId,
     rebuys: number,
     fezAddon: boolean,
+    colocacaoFinal: number | null,
   ): Promise<boolean> => {
     const payload = {
       etapa_id: etapaId,
@@ -472,6 +489,7 @@ export default function DiaDePoker() {
       numero_mesa: numeroMesa,
       rebuys,
       fez_addon: fezAddon,
+      colocacao_final: colocacaoFinal,
     };
 
     // Delete before upsert to avoid duplicates when moving players across tables.
@@ -498,7 +516,7 @@ export default function DiaDePoker() {
     return true;
   };
 
-  const flashJogador = (mesa: 1 | 2 | 3, jogadorId: number) => {
+  const flashJogador = (mesa: MesaId, jogadorId: number) => {
     const currentTimer = flashTimersRef.current[mesa];
     if (currentTimer) {
       clearTimeout(currentTimer);
@@ -515,7 +533,7 @@ export default function DiaDePoker() {
   };
 
   const updateMesaPlayerState = (
-    mesa: 1 | 2 | 3,
+    mesa: MesaId,
     jogadorId: number,
     updater: (current: MesaPlayerRow) => MesaPlayerRow,
   ) => {
@@ -540,7 +558,14 @@ export default function DiaDePoker() {
     if (!currentRow) return;
 
     const nextRebuys = Math.max(0, currentRow.rebuys + delta);
-    const ok = await upsertMesaRegistro(selectedEtapa.id, jogadorId, mesa, nextRebuys, currentRow.fezAddon);
+    const ok = await upsertMesaRegistro(
+      selectedEtapa.id,
+      jogadorId,
+      mesa,
+      nextRebuys,
+      currentRow.fezAddon,
+      currentRow.colocacaoFinal,
+    );
 
     if (!ok) return;
 
@@ -558,7 +583,14 @@ export default function DiaDePoker() {
     const currentRow = mesas[mesa].find((item) => item.jogadorId === jogadorId);
     if (!currentRow) return;
 
-    const ok = await upsertMesaRegistro(selectedEtapa.id, jogadorId, mesa, currentRow.rebuys, checked);
+    const ok = await upsertMesaRegistro(
+      selectedEtapa.id,
+      jogadorId,
+      mesa,
+      currentRow.rebuys,
+      checked,
+      currentRow.colocacaoFinal,
+    );
 
     if (!ok) return;
 
@@ -584,21 +616,22 @@ export default function DiaDePoker() {
       return;
     }
 
-    const ok = await upsertMesaRegistro(selectedEtapa.id, jogadorId, mesa, 0, false);
+    const ok = await upsertMesaRegistro(selectedEtapa.id, jogadorId, mesa, 0, false, null);
     if (!ok) return;
 
     setMesas((current) => ({
       ...current,
-      [mesa]: [...current[mesa], { jogadorId, nome: jogador.nome, rebuys: 0, fezAddon: false }].sort((a, b) =>
-        a.nome.localeCompare(b.nome),
-      ),
+      [mesa]: [
+        ...current[mesa],
+        { jogadorId, nome: jogador.nome, rebuys: 0, fezAddon: false, colocacaoFinal: null },
+      ].sort((a, b) => a.nome.localeCompare(b.nome)),
     }));
 
     setNovoJogadorByMesa((current) => ({ ...current, [mesa]: '' }));
     setError(null);
   };
 
-  const handleRemoveJogador = async (mesa: 1 | 2 | 3, jogadorId: number) => {
+  const handleRemoveJogador = async (mesa: MesaId, jogadorId: number) => {
     if (!selectedEtapa || !etapaEmAndamento) {
       setError('Não é possível remover jogadores com etapa bloqueada.');
       return;
@@ -624,7 +657,7 @@ export default function DiaDePoker() {
     setError(null);
   };
 
-  const handleMoveJogador = async (fromMesa: 1 | 2 | 3, jogadorId: number, toMesa: 1 | 2 | 3) => {
+  const handleMoveJogador = async (fromMesa: MesaId, jogadorId: number, toMesa: MesaId) => {
     if (fromMesa === toMesa) return;
 
     if (!selectedEtapa || !etapaEmAndamento) {
@@ -635,7 +668,8 @@ export default function DiaDePoker() {
     const row = mesas[fromMesa].find((item) => item.jogadorId === jogadorId);
     if (!row) return;
 
-    const ok = await upsertMesaRegistro(selectedEtapa.id, jogadorId, toMesa, row.rebuys, row.fezAddon);
+    const nextColocacao = toMesa === 4 ? row.colocacaoFinal : null;
+    const ok = await upsertMesaRegistro(selectedEtapa.id, jogadorId, toMesa, row.rebuys, row.fezAddon, nextColocacao);
     if (!ok) return;
 
     setMesas((current) => {
@@ -644,13 +678,48 @@ export default function DiaDePoker() {
         a.nome.localeCompare(b.nome),
       );
 
+      const normalizedTarget = nextTarget.map((item) => {
+        if (toMesa !== 4) {
+          return { ...item, colocacaoFinal: null };
+        }
+
+        return item;
+      });
+
       return {
         ...current,
         [fromMesa]: without,
-        [toMesa]: nextTarget,
+        [toMesa]: normalizedTarget,
       };
     });
 
+    setError(null);
+  };
+
+  const handleFinalPlacementChange = async (jogadorId: number, placement: string) => {
+    if (!selectedEtapa || !etapaEmAndamento) {
+      setError('Colocação bloqueada: etapa não está em andamento.');
+      return;
+    }
+
+    const currentRow = mesas[4].find((item) => item.jogadorId === jogadorId);
+    if (!currentRow) return;
+
+    const parsed = Number(placement);
+    const nextPlacement = Number.isFinite(parsed) && parsed >= 1 && parsed <= 9 ? parsed : null;
+
+    const ok = await upsertMesaRegistro(
+      selectedEtapa.id,
+      jogadorId,
+      4,
+      currentRow.rebuys,
+      currentRow.fezAddon,
+      nextPlacement,
+    );
+    if (!ok) return;
+
+    updateMesaPlayerState(4, jogadorId, (item) => ({ ...item, colocacaoFinal: nextPlacement }));
+    flashJogador(4, jogadorId);
     setError(null);
   };
 
@@ -689,7 +758,9 @@ export default function DiaDePoker() {
     return best.row;
   };
 
-  const processVoiceTranscript = async (mesa: 1 | 2 | 3, rawText: string) => {
+  const processVoiceTranscript = async (mesa: MesaId, rawText: string) => {
+    if (mesa === 4) return;
+
     const etapaAtual = selectedEtapaRef.current;
     const etapaAberta = etapaEmAndamentoRef.current;
 
@@ -718,7 +789,14 @@ export default function DiaDePoker() {
 
     if (rebuyMatch) {
       const nextRebuys = jogador.rebuys + 1;
-      const ok = await upsertMesaRegistro(etapaAtual.id, jogador.jogadorId, mesa, nextRebuys, jogador.fezAddon);
+      const ok = await upsertMesaRegistro(
+        etapaAtual.id,
+        jogador.jogadorId,
+        mesa,
+        nextRebuys,
+        jogador.fezAddon,
+        jogador.colocacaoFinal,
+      );
       if (!ok) return;
 
       updateMesaPlayerState(mesa, jogador.jogadorId, (item) => ({ ...item, rebuys: nextRebuys }));
@@ -734,7 +812,14 @@ export default function DiaDePoker() {
         return;
       }
 
-      const ok = await upsertMesaRegistro(etapaAtual.id, jogador.jogadorId, mesa, jogador.rebuys, true);
+      const ok = await upsertMesaRegistro(
+        etapaAtual.id,
+        jogador.jogadorId,
+        mesa,
+        jogador.rebuys,
+        true,
+        jogador.colocacaoFinal,
+      );
       if (!ok) return;
 
       updateMesaPlayerState(mesa, jogador.jogadorId, (item) => ({ ...item, fezAddon: true }));
@@ -806,8 +891,13 @@ export default function DiaDePoker() {
     return instance;
   };
 
-  const toggleMesaVoice = (mesa: 1 | 2 | 3) => {
+  const toggleMesaVoice = (mesa: MesaId) => {
     setError(null);
+
+    if (mesa === 4) {
+      setError('Comando de voz indisponível para a Mesa Final.');
+      return;
+    }
 
     if (!etapaEmAndamento) {
       setError('Comando de voz bloqueado: a etapa precisa estar em andamento.');
@@ -905,9 +995,10 @@ export default function DiaDePoker() {
       1: generateMesaPin(),
       2: generateMesaPin(),
       3: generateMesaPin(),
+      4: generateMesaPin(),
     };
 
-    const pinsPayload = ([1, 2, 3] as Array<1 | 2 | 3>).map((mesa) => ({
+    const pinsPayload = ALL_MESAS.map((mesa) => ({
       etapa_id: etapaIdNum,
       numero_mesa: mesa,
       pin_codigo: generatedPins[mesa],
@@ -924,11 +1015,11 @@ export default function DiaDePoker() {
     }
 
     setMesaPins(generatedPins);
-    setMesaUnlocked(canViewAdminTab ? { 1: true, 2: true, 3: true } : { 1: false, 2: false, 3: false });
+    setMesaUnlocked(canViewAdminTab ? { 1: true, 2: true, 3: true, 4: true } : { 1: false, 2: false, 3: false, 4: false });
 
     await refreshEtapas();
     setMessage(
-      `Etapa iniciada. PINs: Mesa 1 = ${generatedPins[1]} | Mesa 2 = ${generatedPins[2]} | Mesa 3 = ${generatedPins[3]}`,
+      `Etapa iniciada. PINs: Mesa 1 = ${generatedPins[1]} | Mesa 2 = ${generatedPins[2]} | Mesa 3 = ${generatedPins[3]} | Mesa Final = ${generatedPins[4]}`,
     );
     setIsSaving(false);
   };
@@ -1012,18 +1103,20 @@ export default function DiaDePoker() {
         </p>
 
         {selectedEtapa?.status === 'em_andamento' ? (
-          <div className="grid gap-2 rounded-xl border border-[#2c4e65] bg-[#0a1f2d] p-3 text-sm text-slate-200 sm:grid-cols-3">
+          <div className="grid gap-2 rounded-xl border border-[#2c4e65] bg-[#0a1f2d] p-3 text-sm text-slate-200 sm:grid-cols-2 lg:grid-cols-4">
             <p className="font-semibold">Mesa 1 PIN: {mesaPins[1] || '----'}</p>
             <p className="font-semibold">Mesa 2 PIN: {mesaPins[2] || '----'}</p>
             <p className="font-semibold">Mesa 3 PIN: {mesaPins[3] || '----'}</p>
+            <p className="font-semibold">Mesa Final PIN: {mesaPins[4] || '----'}</p>
           </div>
         ) : null}
       </div>
     );
   };
 
-  const renderMesaTab = (mesa: 1 | 2 | 3) => {
+  const renderMesaTab = (mesa: MesaId) => {
     const rows = mesas[mesa];
+    const isFinalMesa = mesa === 4;
     const pinRequired = !canViewAdminTab;
     const unlocked = canViewAdminTab ? true : mesaUnlocked[mesa];
     const blockedByEtapa = !etapaEmAndamento;
@@ -1126,54 +1219,61 @@ export default function DiaDePoker() {
           </p>
         ) : null}
 
-        <div className="flex flex-wrap items-end gap-3 rounded-xl border border-[#1e3d4f] bg-[#091c2a] p-3">
-          <label className="grid min-w-[220px] flex-1 gap-2 text-sm text-slate-300">
-            Adicionar jogador
-            <select
-              className="w-full rounded-lg border border-[#3b5c73] bg-[#0b1d2b] px-3 py-2 text-slate-100 outline-none transition focus:border-[#ff7e38]"
-              value={novoJogadorByMesa[mesa]}
-              onChange={(event) =>
-                setNovoJogadorByMesa((current) => ({
-                  ...current,
-                  [mesa]: event.target.value,
-                }))
-              }
-              disabled={blocked}
-            >
-              <option value="">Selecione...</option>
-              {availablePlayers.map((item) => (
-                <option key={item.id} value={String(item.id)}>
-                  {item.nome}
-                </option>
-              ))}
-            </select>
-          </label>
+        {!isFinalMesa ? (
+          <div className="flex flex-wrap items-end gap-3 rounded-xl border border-[#1e3d4f] bg-[#091c2a] p-3">
+            <label className="grid min-w-[220px] flex-1 gap-2 text-sm text-slate-300">
+              Adicionar jogador
+              <select
+                className="w-full rounded-lg border border-[#3b5c73] bg-[#0b1d2b] px-3 py-2 text-slate-100 outline-none transition focus:border-[#ff7e38]"
+                value={novoJogadorByMesa[mesa]}
+                onChange={(event) =>
+                  setNovoJogadorByMesa((current) => ({
+                    ...current,
+                    [mesa]: event.target.value,
+                  }))
+                }
+                disabled={blocked}
+              >
+                <option value="">Selecione...</option>
+                {availablePlayers.map((item) => (
+                  <option key={item.id} value={String(item.id)}>
+                    {item.nome}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-          <button
-            type="button"
-            onClick={() => void handleAddJogador(mesa)}
-            disabled={blocked || !novoJogadorByMesa[mesa]}
-            className="rounded-lg bg-[#ff5e00] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#ff7d32] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Adicionar
-          </button>
-        </div>
+            <button
+              type="button"
+              onClick={() => void handleAddJogador(mesa as 1 | 2 | 3)}
+              disabled={blocked || !novoJogadorByMesa[mesa]}
+              className="rounded-lg bg-[#ff5e00] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#ff7d32] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Adicionar
+            </button>
+          </div>
+        ) : (
+          <p className="rounded-xl border border-[#2c4e65] bg-[#0a1f2d] px-3 py-2 text-sm text-slate-300">
+            Jogadores entram na Mesa Final apenas pela ação <span className="font-semibold text-slate-100">Mover</span>{' '}
+            nas outras mesas.
+          </p>
+        )}
 
         <div className="overflow-x-auto">
           <table className="min-w-full border-collapse text-sm">
             <thead>
               <tr className="border-b border-[#2b4b61] text-left text-xs uppercase tracking-[0.08em] text-slate-300">
                 <th className="px-3 py-2">Jogador</th>
-                <th className="px-3 py-2">Rebuys</th>
-                <th className="px-3 py-2">Add-on</th>
+                {isFinalMesa ? <th className="px-3 py-2">Colocação</th> : <th className="px-3 py-2">Rebuys</th>}
+                {!isFinalMesa ? <th className="px-3 py-2">Add-on</th> : null}
                 <th className="px-3 py-2">Mover</th>
-                <th className="px-3 py-2">Ações</th>
+                {!isFinalMesa ? <th className="px-3 py-2">Ações</th> : null}
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-3 py-4 text-center text-slate-400">
+                  <td colSpan={isFinalMesa ? 3 : 5} className="px-3 py-4 text-center text-slate-400">
                     Nenhum jogador alocado nesta mesa.
                   </td>
                 </tr>
@@ -1193,66 +1293,95 @@ export default function DiaDePoker() {
                     >
                       <td className="px-3 py-2 font-medium text-slate-100">{row.nome}</td>
 
-                      <td className="px-3 py-2">
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => void handleRebuyChange(mesa, row.jogadorId, -1)}
-                            disabled={blocked || row.rebuys <= 0}
-                            className="h-8 w-8 rounded-md border border-[#3b5c73] bg-[#0d2431] text-lg text-slate-200 transition hover:bg-[#183a4f] disabled:cursor-not-allowed disabled:opacity-40"
-                          >
-                            -
-                          </button>
-                          <span className="inline-flex min-w-8 justify-center text-slate-100">{row.rebuys}</span>
-                          <button
-                            type="button"
-                            onClick={() => void handleRebuyChange(mesa, row.jogadorId, 1)}
+                      {isFinalMesa ? (
+                        <td className="px-3 py-2">
+                          <select
+                            className="rounded-lg border border-[#3b5c73] bg-[#0b1d2b] px-2 py-1 text-slate-100 outline-none transition focus:border-[#ff7e38]"
+                            value={row.colocacaoFinal ? String(row.colocacaoFinal) : ''}
+                            onChange={(event) => void handleFinalPlacementChange(row.jogadorId, event.target.value)}
                             disabled={blocked}
-                            className="h-8 w-8 rounded-md border border-[#3b5c73] bg-[#0d2431] text-lg text-slate-200 transition hover:bg-[#183a4f] disabled:cursor-not-allowed disabled:opacity-40"
                           >
-                            +
-                          </button>
-                        </div>
-                      </td>
+                            <option value="">Selecionar</option>
+                            <option value="1">1º</option>
+                            <option value="2">2º</option>
+                            <option value="3">3º</option>
+                            <option value="4">4º</option>
+                            <option value="5">5º</option>
+                            <option value="6">6º</option>
+                            <option value="7">7º</option>
+                            <option value="8">8º</option>
+                            <option value="9">9º</option>
+                          </select>
+                        </td>
+                      ) : (
+                        <>
+                          <td className="px-3 py-2">
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => void handleRebuyChange(mesa as 1 | 2 | 3, row.jogadorId, -1)}
+                                disabled={blocked || row.rebuys <= 0}
+                                className="h-8 w-8 rounded-md border border-[#3b5c73] bg-[#0d2431] text-lg text-slate-200 transition hover:bg-[#183a4f] disabled:cursor-not-allowed disabled:opacity-40"
+                              >
+                                -
+                              </button>
+                              <span className="inline-flex min-w-8 justify-center text-slate-100">{row.rebuys}</span>
+                              <button
+                                type="button"
+                                onClick={() => void handleRebuyChange(mesa as 1 | 2 | 3, row.jogadorId, 1)}
+                                disabled={blocked}
+                                className="h-8 w-8 rounded-md border border-[#3b5c73] bg-[#0d2431] text-lg text-slate-200 transition hover:bg-[#183a4f] disabled:cursor-not-allowed disabled:opacity-40"
+                              >
+                                +
+                              </button>
+                            </div>
+                          </td>
 
-                      <td className="px-3 py-2">
-                        <label className="inline-flex items-center gap-2 text-slate-200">
-                          <input
-                            type="checkbox"
-                            checked={row.fezAddon}
-                            onChange={(event) => void handleAddonToggle(mesa, row.jogadorId, event.target.checked)}
-                            disabled={blocked}
-                            className="h-4 w-4 accent-emerald-500"
-                          />
-                          Sim
-                        </label>
-                      </td>
+                          <td className="px-3 py-2">
+                            <label className="inline-flex items-center gap-2 text-slate-200">
+                              <input
+                                type="checkbox"
+                                checked={row.fezAddon}
+                                onChange={(event) =>
+                                  void handleAddonToggle(mesa as 1 | 2 | 3, row.jogadorId, event.target.checked)
+                                }
+                                disabled={blocked}
+                                className="h-4 w-4 accent-emerald-500"
+                              />
+                              Sim
+                            </label>
+                          </td>
+                        </>
+                      )}
 
                       <td className="px-3 py-2">
                         <select
                           className="rounded-lg border border-[#3b5c73] bg-[#0b1d2b] px-2 py-1 text-slate-100 outline-none transition focus:border-[#ff7e38]"
                           value={String(mesa)}
                           onChange={(event) =>
-                            void handleMoveJogador(mesa, row.jogadorId, Number(event.target.value) as 1 | 2 | 3)
+                            void handleMoveJogador(mesa, row.jogadorId, Number(event.target.value) as MesaId)
                           }
                           disabled={blocked}
                         >
                           <option value="1">Mesa 1</option>
                           <option value="2">Mesa 2</option>
                           <option value="3">Mesa 3</option>
+                          <option value="4">Mesa Final</option>
                         </select>
                       </td>
 
-                      <td className="px-3 py-2">
-                        <button
-                          type="button"
-                          onClick={() => void handleRemoveJogador(mesa, row.jogadorId)}
-                          disabled={blocked}
-                          className="rounded-lg border border-rose-400/40 bg-rose-500/10 px-3 py-1 text-xs font-semibold text-rose-200 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          Remover
-                        </button>
-                      </td>
+                      {!isFinalMesa ? (
+                        <td className="px-3 py-2">
+                          <button
+                            type="button"
+                            onClick={() => void handleRemoveJogador(mesa, row.jogadorId)}
+                            disabled={blocked}
+                            className="rounded-lg border border-rose-400/40 bg-rose-500/10 px-3 py-1 text-xs font-semibold text-rose-200 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            Remover
+                          </button>
+                        </td>
+                      ) : null}
                     </tr>
                   );
                 })
@@ -1314,6 +1443,7 @@ export default function DiaDePoker() {
       {activeMesa === 1 ? renderMesaTab(1) : null}
       {activeMesa === 2 ? renderMesaTab(2) : null}
       {activeMesa === 3 ? renderMesaTab(3) : null}
+      {activeMesa === 4 ? renderMesaTab(4) : null}
     </section>
   );
 }

@@ -25,8 +25,10 @@ type PreJogoEtapaRow = {
 
 type RegistroMesaTempRow = {
   jogador_id: number;
+  numero_mesa: number;
   rebuys: number | null;
   fez_addon: boolean | null;
+  colocacao_final: number | null;
 };
 
 type RegistroFormRow = {
@@ -410,75 +412,76 @@ export default function RegistroResultados() {
         return;
       }
 
-      const { data: tempRowsData, error: tempRowsError } = await supabase
-        .from('registros_mesas_temp')
-        .select('jogador_id, rebuys, fez_addon')
-        .eq('etapa_id', Number(etapaId));
+      const [tempRowsResult, preJogoResult] = await Promise.all([
+        supabase
+          .from('registros_mesas_temp')
+          .select('jogador_id, numero_mesa, rebuys, fez_addon, colocacao_final')
+          .eq('etapa_id', Number(etapaId)),
+        supabase.from('pre_jogo_etapa').select('participant_ids').eq('etapa_id', Number(etapaId)).maybeSingle(),
+      ]);
 
-      if (tempRowsError) {
-        setError(`Não foi possível carregar pré-registros das mesas para esta etapa: ${tempRowsError.message}`);
+      if (tempRowsResult.error) {
+        setError(`Não foi possível carregar pré-registros das mesas para esta etapa: ${tempRowsResult.error.message}`);
         setRows([createEmptyRow()]);
         return;
       }
 
-      const tempRows = (tempRowsData ?? []) as RegistroMesaTempRow[];
-      if (tempRows.length > 0) {
-        const activeJogadoresSet = new Set(jogadores.map((jogador) => jogador.id));
-        const uniqueByJogador = new Map<number, RegistroMesaTempRow>();
+      if (preJogoResult.error) {
+        setError(`Não foi possível carregar participantes do Pré-jogo para esta etapa: ${preJogoResult.error.message}`);
+        setRows([createEmptyRow()]);
+        return;
+      }
 
-        tempRows.forEach((row) => {
-          if (activeJogadoresSet.has(row.jogador_id)) {
-            uniqueByJogador.set(row.jogador_id, row);
-          }
-        });
+      const tempRows = (tempRowsResult.data ?? []) as RegistroMesaTempRow[];
+      const participantIds = (preJogoResult.data as PreJogoEtapaRow | null)?.participant_ids ?? [];
+      const activeJogadoresSet = new Set(jogadores.map((jogador) => jogador.id));
+      const byJogador = new Map<number, RegistroMesaTempRow>();
 
-        const preloadedRows = Array.from(uniqueByJogador.values()).map((row) => ({
+      tempRows.forEach((row) => {
+        if (activeJogadoresSet.has(row.jogador_id)) {
+          byJogador.set(row.jogador_id, row);
+        }
+      });
+
+      Array.from(new Set(participantIds)).forEach((participantId) => {
+        if (!activeJogadoresSet.has(participantId)) return;
+        if (!byJogador.has(participantId)) {
+          byJogador.set(participantId, {
+            jogador_id: participantId,
+            numero_mesa: 0,
+            rebuys: 0,
+            fez_addon: false,
+            colocacao_final: null,
+          });
+        }
+      });
+
+      const preloadedRows = Array.from(byJogador.values()).map((row) => {
+        const isFinalTable = row.numero_mesa === 4;
+        const finalPlacement = Number(row.colocacao_final ?? 0);
+        const colocacao = isFinalTable && finalPlacement >= 1 && finalPlacement <= 9 ? String(finalPlacement) : '10';
+
+        return {
           ...createFilledRow(String(row.jogador_id)),
           rebuys: String(Math.max(0, Number(row.rebuys ?? 0))),
           fezAddon: Boolean(row.fez_addon),
-        }));
+          colocacao,
+        };
+      });
 
-        if (preloadedRows.length > 0) {
-          setRows(ensureTrailingEmptyRow(preloadedRows));
-          setSuccess(`Lista pré-carregada com ${preloadedRows.length} participante(s) das mesas.`);
-          setError(null);
-          return;
-        }
-      }
-
-      const { data, error: preJogoError } = await supabase
-        .from('pre_jogo_etapa')
-        .select('participant_ids')
-        .eq('etapa_id', Number(etapaId))
-        .maybeSingle();
-
-      if (preJogoError) {
-        setError(`Não foi possível carregar participantes do Pré-jogo para esta etapa: ${preJogoError.message}`);
-        setRows([createEmptyRow()]);
+      if (preloadedRows.length > 0) {
+        setRows(ensureTrailingEmptyRow(preloadedRows));
+        setSuccess(`Lista pré-carregada com ${preloadedRows.length} participante(s) das mesas.`);
+        setError(null);
         return;
       }
 
-      const participantIds = (data as PreJogoEtapaRow | null)?.participant_ids ?? [];
-      const activeJogadoresSet = new Set(jogadores.map((jogador) => jogador.id));
-      const availableParticipantIds = Array.from(new Set(participantIds)).filter((id) => activeJogadoresSet.has(id));
-
-      if (availableParticipantIds.length === 0) {
-        setRows([createEmptyRow()]);
-        return;
-      }
-
-      const preloadedRows = availableParticipantIds.map((id) => createFilledRow(String(id)));
-      setRows(ensureTrailingEmptyRow(preloadedRows));
-      setSuccess(`Lista manual pré-carregada com ${availableParticipantIds.length} participante(s) do Pré-jogo.`);
+      setRows([createEmptyRow()]);
       setError(null);
     };
 
     void loadPreJogoParticipants();
   }, [etapaId, jogadores]);
-
-  const resetForm = () => {
-    setRows([createEmptyRow()]);
-  };
 
   const jogadoresPorNome = useMemo(() => {
     return jogadores.map((jogador) => ({
@@ -1085,76 +1088,76 @@ export default function RegistroResultados() {
 
     setIsSaving(true);
 
-    if (qtdPagadoresSalao === 1) {
-      const { data: existentes, error: consultaSalaoError } = await supabase
-        .from('registros_etapa')
-        .select('id')
-        .eq('etapa_id', Number(etapaId))
-        .gt('pagou_salao', 0)
-        .limit(1);
+    const payload = validRows.map((row) => {
+      const rebuys = Math.max(0, parseIntOrNull(row.rebuys) ?? 0);
+      const colocacao = row.tipo === 'visitante' ? null : parseIntOrNull(row.colocacao);
+      const pagouSalao = row.pagouSalao ? custoSalao : 0;
 
-      if (consultaSalaoError) {
-        setError(`Erro ao validar pagamento do salão: ${consultaSalaoError.message}`);
-        setIsSaving(false);
-        return;
-      }
+      return {
+        etapa_id: Number(etapaId),
+        jogador_id: Number(row.jogadorId),
+        tipo_participante: row.tipo,
+        jantou: row.jantou,
+        cozinheiro: row.cozinheiro,
+        melhor_mao: row.melhorMao,
+        colocacao,
+        rebuys,
+        fez_addon: row.fezAddon,
+        pagou_salao: pagouSalao,
+        pagou_janta: parseFloatOrNull(row.pagouJanta) ?? 0,
+        outros_custos: parseFloatOrNull(row.outrosCustos) ?? 0,
+      };
+    });
 
-      if ((existentes ?? []).length > 0) {
-        setError('Esta etapa já possui um participante marcado como pagador do salão.');
-        setIsSaving(false);
-        return;
-      }
-    }
+    const { error: saveError } = await supabase.from('registros_etapa').upsert(payload, {
+      onConflict: 'etapa_id,jogador_id',
+    });
 
-    const payload = validRows.map((row) => ({
-      etapa_id: Number(etapaId),
-      jogador_id: Number(row.jogadorId),
-      tipo_participante: row.tipo,
-      jantou: row.cozinheiro ? false : row.jantou,
-      cozinheiro: row.cozinheiro,
-      melhor_mao: row.melhorMao,
-      fez_addon: row.fezAddon,
-      colocacao: row.tipo === 'visitante' ? null : parseIntOrNull(row.colocacao),
-      rebuys: parseIntOrNull(row.rebuys) ?? 0,
-      pagou_salao: row.pagouSalao ? custoSalao : null,
-      pagou_janta: parseFloatOrNull(row.pagouJanta),
-      outros_custos: parseFloatOrNull(row.outrosCustos),
-    }));
+    setIsSaving(false);
 
-    const { error: insertError } = await supabase.from('registros_etapa').insert(payload);
-
-    if (insertError) {
-      setError(`Erro ao registrar resultado: ${insertError.message}`);
-      setIsSaving(false);
+    if (saveError) {
+      setError(`Erro ao salvar registros: ${saveError.message}`);
       return;
     }
 
-    setSuccess('Resultado registrado com sucesso.');
+    setSuccess(`Registros salvos com sucesso para ${validRows.length} participante(s).`);
     resetForm();
-    setIsSaving(false);
+  };
+
+  const resetForm = () => {
+    setRows([createEmptyRow()]);
+    setImportPreviewRows([]);
+    setImportWarnings([]);
+    setOcrRawText('');
   };
 
   const isDisabled = isLoading || isSaving;
 
+  if (isLoading) {
+    return (
+      <main className="mx-auto max-w-7xl p-4 sm:p-6 lg:p-8">
+        <p className="rounded-lg border border-[#244357] bg-[#0b1a25] px-4 py-3 text-sm text-slate-200">Carregando dados...</p>
+      </main>
+    );
+  }
+
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(255,94,0,0.08),transparent_24%),linear-gradient(180deg,#061019_0%,#07131d_40%,#081723_100%)] py-10 px-4 sm:px-6 lg:px-8">
-      <section className="mx-auto w-full max-w-[1700px] rounded-3xl border border-[#244357] bg-[#081723]/92 p-6 shadow-[0_18px_45px_rgba(3,8,14,0.42)] sm:p-8">
-        <header className="mb-6 flex flex-col gap-4 rounded-2xl border border-[#244357] bg-[#0c1f2c] px-5 py-4 shadow-[0_8px_22px_rgba(1,4,8,0.28)] lg:flex-row lg:items-end lg:justify-between">
+    <main className="mx-auto max-w-7xl p-4 sm:p-6 lg:p-8">
+      <section className="rounded-2xl border border-[#244357] bg-[#081723] p-4 sm:p-6">
+        <header className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-slate-50">Registro de Resultados de Etapas</h1>
-            <p className="mt-1 text-sm text-slate-300">Preencha os dados dos participantes e registre no Supabase.</p>
+            <h1 className="text-2xl font-semibold text-slate-50">Registro de Resultados</h1>
+            <p className="text-sm text-slate-300">Esta tela grava oficialmente os dados em registros_etapa.</p>
           </div>
 
-          <label className="flex w-full max-w-sm flex-col gap-1 text-sm text-slate-200">
+          <label className="grid gap-1 text-sm text-slate-300">
             Etapa
             <select
               value={etapaId}
               onChange={(event) => setEtapaId(event.target.value)}
               disabled={isDisabled}
-              className="h-11 rounded-lg border border-[#244357] bg-[#0b1a25] px-3 text-slate-50 outline-none transition focus:border-[#ff5e00]"
-              required
+              className="h-10 min-w-[280px] rounded-lg border border-[#244357] bg-[#0b1a25] px-3 text-sm text-slate-100 outline-none transition focus:border-[#ff5e00] disabled:opacity-60"
             >
-              <option value="">Selecione uma etapa</option>
               {etapas.map((etapa) => (
                 <option key={etapa.id} value={etapa.id}>
                   {etapa.codigo_etapa} - {new Date(etapa.data_etapa).toLocaleDateString('pt-BR')}

@@ -156,3 +156,31 @@ ON CONFLICT DO NOTHING;
 INSERT INTO temporadas (codigo_temporada, ativa)
 VALUES ('2026-T1', TRUE)
 ON CONFLICT DO NOTHING;
+
+-- =====================================================
+-- AJUSTES DE MIGRACAO (MESA FINAL)
+-- =====================================================
+
+-- Permite PIN para Mesa Final (1..4).
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.table_constraints
+        WHERE table_name = 'etapa_mesa_pins'
+          AND constraint_name = 'etapa_mesa_pins_numero_mesa_check'
+    ) THEN
+        ALTER TABLE etapa_mesa_pins DROP CONSTRAINT etapa_mesa_pins_numero_mesa_check;
+    END IF;
+
+    ALTER TABLE etapa_mesa_pins
+        ADD CONSTRAINT etapa_mesa_pins_numero_mesa_check
+        CHECK (numero_mesa BETWEEN 1 AND 4);
+EXCEPTION
+    WHEN duplicate_object THEN
+        NULL;
+END $$;
+
+-- Garante coluna de colocacao final para pre-preenchimento de Resultados.
+ALTER TABLE IF EXISTS registros_mesas_temp
+    ADD COLUMN IF NOT EXISTS colocacao_final INTEGER;
