@@ -28,6 +28,7 @@ type RegistroMesaTempRow = {
   numero_mesa: number;
   rebuys: number | null;
   fez_addon: boolean | null;
+  jantou: boolean | null;
   colocacao_final: number | null;
 };
 
@@ -415,7 +416,7 @@ export default function RegistroResultados() {
       const [tempRowsResult, preJogoResult] = await Promise.all([
         supabase
           .from('registros_mesas_temp')
-          .select('jogador_id, numero_mesa, rebuys, fez_addon, colocacao_final')
+          .select('jogador_id, numero_mesa, rebuys, fez_addon, jantou, colocacao_final')
           .eq('etapa_id', Number(etapaId)),
         supabase.from('pre_jogo_etapa').select('participant_ids').eq('etapa_id', Number(etapaId)).maybeSingle(),
       ]);
@@ -451,6 +452,7 @@ export default function RegistroResultados() {
             numero_mesa: 0,
             rebuys: 0,
             fez_addon: false,
+            jantou: false,
             colocacao_final: null,
           });
         }
@@ -465,6 +467,7 @@ export default function RegistroResultados() {
           ...createFilledRow(String(row.jogador_id)),
           rebuys: String(Math.max(0, Number(row.rebuys ?? 0))),
           fezAddon: Boolean(row.fez_addon),
+          jantou: Boolean(row.jantou),
           colocacao,
         };
       });

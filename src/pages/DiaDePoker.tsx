@@ -25,6 +25,7 @@ type RegistroMesaTemp = {
   numero_mesa: number;
   rebuys: number | null;
   fez_addon: boolean | null;
+  jantou: boolean | null;
   colocacao_final: number | null;
 };
 
@@ -33,6 +34,7 @@ type MesaPlayerRow = {
   nome: string;
   rebuys: number;
   fezAddon: boolean;
+  jantou: boolean;
   colocacaoFinal: number | null;
 };
 
@@ -144,6 +146,7 @@ function buildMesasFromSources(
         nome: jogador.nome,
         rebuys: 0,
         fezAddon: false,
+        jantou: false,
         colocacaoFinal: null,
       });
 
@@ -161,6 +164,7 @@ function buildMesasFromSources(
     if (existing) {
       existing.rebuys = Math.max(0, Number(row.rebuys ?? 0));
       existing.fezAddon = Boolean(row.fez_addon);
+      existing.jantou = Boolean(row.jantou);
       existing.colocacaoFinal = row.colocacao_final ?? null;
       return;
     }
@@ -170,6 +174,7 @@ function buildMesasFromSources(
       nome: jogador.nome,
       rebuys: Math.max(0, Number(row.rebuys ?? 0)),
       fezAddon: Boolean(row.fez_addon),
+      jantou: Boolean(row.jantou),
       colocacaoFinal: row.colocacao_final ?? null,
     });
   });
@@ -397,7 +402,7 @@ export default function DiaDePoker() {
         supabase.from('pre_jogo_etapa').select('tables_json').eq('etapa_id', etapaIdNum).maybeSingle(),
         supabase
           .from('registros_mesas_temp')
-          .select('etapa_id, jogador_id, numero_mesa, rebuys, fez_addon, colocacao_final')
+          .select('etapa_id, jogador_id, numero_mesa, rebuys, fez_addon, jantou, colocacao_final')
           .eq('etapa_id', etapaIdNum),
         supabase.from('etapa_mesa_pins').select('numero_mesa, pin_codigo').eq('etapa_id', etapaIdNum),
       ]);
@@ -492,6 +497,7 @@ export default function DiaDePoker() {
     numeroMesa: MesaId,
     rebuys: number,
     fezAddon: boolean,
+    jantou: boolean,
     colocacaoFinal: number | null,
   ): Promise<boolean> => {
     const payload = {
@@ -500,6 +506,7 @@ export default function DiaDePoker() {
       numero_mesa: numeroMesa,
       rebuys,
       fez_addon: fezAddon,
+      jantou,
       colocacao_final: colocacaoFinal,
     };
 
@@ -588,6 +595,7 @@ export default function DiaDePoker() {
       mesa,
       nextRebuys,
       currentRow.fezAddon,
+      currentRow.jantou,
       currentRow.colocacaoFinal,
     );
 
@@ -614,6 +622,7 @@ export default function DiaDePoker() {
       mesa,
       currentRow.rebuys,
       checked,
+      currentRow.jantou,
       currentRow.colocacaoFinal,
     );
 
@@ -623,6 +632,32 @@ export default function DiaDePoker() {
     if (checked) {
       appendActionLog(mesa, currentRow.nome, 'addon');
     }
+    flashJogador(mesa, jogadorId);
+    setError(null);
+  };
+
+  const handleJantouToggle = async (mesa: 1 | 2 | 3, jogadorId: number, checked: boolean) => {
+    if (!selectedEtapa || !etapaEmAndamento) {
+      setError('Registros estão bloqueados. A etapa precisa estar em andamento.');
+      return;
+    }
+
+    const currentRow = mesas[mesa].find((item) => item.jogadorId === jogadorId);
+    if (!currentRow) return;
+
+    const ok = await upsertMesaRegistro(
+      selectedEtapa.id,
+      jogadorId,
+      mesa,
+      currentRow.rebuys,
+      currentRow.fezAddon,
+      checked,
+      currentRow.colocacaoFinal,
+    );
+
+    if (!ok) return;
+
+    updateMesaPlayerState(mesa, jogadorId, (item) => ({ ...item, jantou: checked }));
     flashJogador(mesa, jogadorId);
     setError(null);
   };
@@ -644,14 +679,14 @@ export default function DiaDePoker() {
       return;
     }
 
-    const ok = await upsertMesaRegistro(selectedEtapa.id, jogadorId, mesa, 0, false, null);
+    const ok = await upsertMesaRegistro(selectedEtapa.id, jogadorId, mesa, 0, false, false, null);
     if (!ok) return;
 
     setMesas((current) => ({
       ...current,
       [mesa]: [
         ...current[mesa],
-        { jogadorId, nome: jogador.nome, rebuys: 0, fezAddon: false, colocacaoFinal: null },
+        { jogadorId, nome: jogador.nome, rebuys: 0, fezAddon: false, jantou: false, colocacaoFinal: null },
       ].sort((a, b) => a.nome.localeCompare(b.nome)),
     }));
 
@@ -711,7 +746,15 @@ export default function DiaDePoker() {
     }
 
     const nextColocacao = toMesa === 4 ? row.colocacaoFinal : null;
-    const ok = await upsertMesaRegistro(selectedEtapa.id, jogadorId, toMesa, row.rebuys, row.fezAddon, nextColocacao);
+    const ok = await upsertMesaRegistro(
+      selectedEtapa.id,
+      jogadorId,
+      toMesa,
+      row.rebuys,
+      row.fezAddon,
+      row.jantou,
+      nextColocacao,
+    );
     if (!ok) return;
 
     setMesas((current) => {
@@ -756,6 +799,7 @@ export default function DiaDePoker() {
       4,
       currentRow.rebuys,
       currentRow.fezAddon,
+      currentRow.jantou,
       nextPlacement,
     );
     if (!ok) return;
@@ -837,6 +881,7 @@ export default function DiaDePoker() {
         mesa,
         nextRebuys,
         jogador.fezAddon,
+        jogador.jantou,
         jogador.colocacaoFinal,
       );
       if (!ok) return;
@@ -861,6 +906,7 @@ export default function DiaDePoker() {
         mesa,
         jogador.rebuys,
         true,
+        jogador.jantou,
         jogador.colocacaoFinal,
       );
       if (!ok) return;
@@ -1295,6 +1341,7 @@ export default function DiaDePoker() {
                 <th className="px-3 py-2">Jogador</th>
                 {isFinalMesa ? <th className="px-3 py-2">Colocação</th> : <th className="px-3 py-2">Rebuys</th>}
                 {!isFinalMesa ? <th className="px-3 py-2">Add-on</th> : null}
+                {!isFinalMesa ? <th className="px-3 py-2">Jantou</th> : null}
                 <th className="px-3 py-2">Mover</th>
                 {!isFinalMesa ? <th className="px-3 py-2">Ações</th> : null}
               </tr>
@@ -1302,7 +1349,7 @@ export default function DiaDePoker() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={isFinalMesa ? 3 : 5} className="px-3 py-4 text-center text-slate-400">
+                  <td colSpan={isFinalMesa ? 3 : 6} className="px-3 py-4 text-center text-slate-400">
                     Nenhum jogador alocado nesta mesa.
                   </td>
                 </tr>
@@ -1371,6 +1418,21 @@ export default function DiaDePoker() {
                                 checked={row.fezAddon}
                                 onChange={(event) =>
                                   void handleAddonToggle(mesa as 1 | 2 | 3, row.jogadorId, event.target.checked)
+                                }
+                                disabled={blocked}
+                                className="h-4 w-4 accent-emerald-500"
+                              />
+                              Sim
+                            </label>
+                          </td>
+
+                          <td className="px-3 py-2">
+                            <label className="inline-flex items-center gap-2 text-slate-200">
+                              <input
+                                type="checkbox"
+                                checked={row.jantou}
+                                onChange={(event) =>
+                                  void handleJantouToggle(mesa as 1 | 2 | 3, row.jogadorId, event.target.checked)
                                 }
                                 disabled={blocked}
                                 className="h-4 w-4 accent-emerald-500"

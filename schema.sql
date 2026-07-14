@@ -184,3 +184,7 @@ END $$;
 -- Garante coluna de colocacao final para pre-preenchimento de Resultados.
 ALTER TABLE IF EXISTS registros_mesas_temp
     ADD COLUMN IF NOT EXISTS colocacao_final INTEGER;
+
+-- Garante coluna de jantou para pre-preenchimento de Resultados.
+ALTER TABLE IF EXISTS registros_mesas_temp
+    ADD COLUMN IF NOT EXISTS jantou BOOLEAN DEFAULT FALSE;
