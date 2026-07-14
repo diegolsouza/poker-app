@@ -40,6 +40,16 @@ type MesaRowsState = Record<MesaId, MesaPlayerRow[]>;
 
 type MesaPinState = Record<MesaId, string>;
 
+type MesaActionType = '+rebuy' | '-rebuy' | 'addon';
+
+type MesaActionLog = {
+  id: number;
+  horario: string;
+  mesa: MesaId;
+  jogador: string;
+  acao: MesaActionType;
+};
+
 type RecognitionLike = {
   lang: string;
   continuous: boolean;
@@ -208,6 +218,7 @@ export default function DiaDePoker() {
     3: '',
     4: '',
   });
+  const [actionLogs, setActionLogs] = useState<MesaActionLog[]>([]);
   const [flashByMesa, setFlashByMesa] = useState<Record<number, number | null>>({
     1: null,
     2: null,
@@ -548,6 +559,19 @@ export default function DiaDePoker() {
     });
   };
 
+  const appendActionLog = (mesa: MesaId, jogador: string, acao: MesaActionType) => {
+    setActionLogs((current) => [
+      {
+        id: Date.now() + Math.floor(Math.random() * 1000),
+        horario: new Date().toLocaleTimeString('pt-BR', { hour12: false }),
+        mesa,
+        jogador,
+        acao,
+      },
+      ...current,
+    ].slice(0, 120));
+  };
+
   const handleRebuyChange = async (mesa: 1 | 2 | 3, jogadorId: number, delta: 1 | -1) => {
     if (!selectedEtapa || !etapaEmAndamento) {
       setError('Registros estão bloqueados. A etapa precisa estar em andamento.');
@@ -570,6 +594,7 @@ export default function DiaDePoker() {
     if (!ok) return;
 
     updateMesaPlayerState(mesa, jogadorId, (item) => ({ ...item, rebuys: nextRebuys }));
+    appendActionLog(mesa, currentRow.nome, delta === 1 ? '+rebuy' : '-rebuy');
     flashJogador(mesa, jogadorId);
     setError(null);
   };
@@ -595,6 +620,9 @@ export default function DiaDePoker() {
     if (!ok) return;
 
     updateMesaPlayerState(mesa, jogadorId, (item) => ({ ...item, fezAddon: checked }));
+    if (checked) {
+      appendActionLog(mesa, currentRow.nome, 'addon');
+    }
     flashJogador(mesa, jogadorId);
     setError(null);
   };
@@ -637,6 +665,15 @@ export default function DiaDePoker() {
       return;
     }
 
+    const jogador = mesas[mesa].find((item) => item.jogadorId === jogadorId);
+    const confirmed = window.confirm(
+      `Tem certeza que deseja remover ${jogador?.nome ?? 'este jogador'} da Mesa ${mesa}?`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
     const { error: deleteError } = await supabase
       .from('registros_mesas_temp')
       .delete()
@@ -667,6 +704,11 @@ export default function DiaDePoker() {
 
     const row = mesas[fromMesa].find((item) => item.jogadorId === jogadorId);
     if (!row) return;
+
+    if (toMesa === 4 && mesas[4].length >= 9) {
+      setError('A Mesa Final já está completa com 9 jogadores.');
+      return;
+    }
 
     const nextColocacao = toMesa === 4 ? row.colocacaoFinal : null;
     const ok = await upsertMesaRegistro(selectedEtapa.id, jogadorId, toMesa, row.rebuys, row.fezAddon, nextColocacao);
@@ -800,6 +842,7 @@ export default function DiaDePoker() {
       if (!ok) return;
 
       updateMesaPlayerState(mesa, jogador.jogadorId, (item) => ({ ...item, rebuys: nextRebuys }));
+      appendActionLog(mesa, jogador.nome, '+rebuy');
       flashJogador(mesa, jogador.jogadorId);
       setMessage(`Comando de voz: ${jogador.nome} recebeu +1 rebuy.`);
       setError(null);
@@ -823,6 +866,7 @@ export default function DiaDePoker() {
       if (!ok) return;
 
       updateMesaPlayerState(mesa, jogador.jogadorId, (item) => ({ ...item, fezAddon: true }));
+      appendActionLog(mesa, jogador.nome, 'addon');
       flashJogador(mesa, jogador.jogadorId);
       setMessage(`Comando de voz: add-on aplicado para ${jogador.nome}.`);
       setError(null);
@@ -1110,6 +1154,23 @@ export default function DiaDePoker() {
             <p className="font-semibold">Mesa Final PIN: {mesaPins[4] || '----'}</p>
           </div>
         ) : null}
+
+        <div className="rounded-xl border border-[#2c4e65] bg-[#0a1f2d] p-3">
+          <p className="mb-2 text-sm font-semibold text-slate-100">Log de ações das mesas</p>
+          {actionLogs.length === 0 ? (
+            <p className="text-xs text-slate-400">Nenhuma ação registrada ainda.</p>
+          ) : (
+            <div className="max-h-56 overflow-y-auto">
+              <ul className="space-y-1 text-xs text-slate-200">
+                {actionLogs.map((log) => (
+                  <li key={log.id} className="rounded-md border border-[#335770] bg-[#0b1d2b] px-2 py-1">
+                    [{log.horario}] Mesa {log.mesa} | {log.jogador} | {log.acao}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
       </div>
     );
   };
@@ -1123,6 +1184,7 @@ export default function DiaDePoker() {
     const blockedByPin = pinRequired && !unlocked;
     const blocked = blockedByEtapa || blockedByPin;
     const availablePlayers = jogadores.filter((item) => !jogadorMesaAtualMap.has(item.id));
+    const usedFinalPlacements = new Set(rows.map((item) => item.colocacaoFinal).filter((value): value is number => value !== null));
 
     return (
       <div className="grid gap-5 rounded-2xl border border-[#2d4659]/70 bg-[#0d2431]/80 p-5 shadow-[0_14px_34px_rgba(0,0,0,0.35)] sm:p-6">
@@ -1219,45 +1281,12 @@ export default function DiaDePoker() {
           </p>
         ) : null}
 
-        {!isFinalMesa ? (
-          <div className="flex flex-wrap items-end gap-3 rounded-xl border border-[#1e3d4f] bg-[#091c2a] p-3">
-            <label className="grid min-w-[220px] flex-1 gap-2 text-sm text-slate-300">
-              Adicionar jogador
-              <select
-                className="w-full rounded-lg border border-[#3b5c73] bg-[#0b1d2b] px-3 py-2 text-slate-100 outline-none transition focus:border-[#ff7e38]"
-                value={novoJogadorByMesa[mesa]}
-                onChange={(event) =>
-                  setNovoJogadorByMesa((current) => ({
-                    ...current,
-                    [mesa]: event.target.value,
-                  }))
-                }
-                disabled={blocked}
-              >
-                <option value="">Selecione...</option>
-                {availablePlayers.map((item) => (
-                  <option key={item.id} value={String(item.id)}>
-                    {item.nome}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <button
-              type="button"
-              onClick={() => void handleAddJogador(mesa as 1 | 2 | 3)}
-              disabled={blocked || !novoJogadorByMesa[mesa]}
-              className="rounded-lg bg-[#ff5e00] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#ff7d32] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Adicionar
-            </button>
-          </div>
-        ) : (
+        {isFinalMesa ? (
           <p className="rounded-xl border border-[#2c4e65] bg-[#0a1f2d] px-3 py-2 text-sm text-slate-300">
             Jogadores entram na Mesa Final apenas pela ação <span className="font-semibold text-slate-100">Mover</span>{' '}
             nas outras mesas.
           </p>
-        )}
+        ) : null}
 
         <div className="overflow-x-auto">
           <table className="min-w-full border-collapse text-sm">
@@ -1302,15 +1331,13 @@ export default function DiaDePoker() {
                             disabled={blocked}
                           >
                             <option value="">Selecionar</option>
-                            <option value="1">1º</option>
-                            <option value="2">2º</option>
-                            <option value="3">3º</option>
-                            <option value="4">4º</option>
-                            <option value="5">5º</option>
-                            <option value="6">6º</option>
-                            <option value="7">7º</option>
-                            <option value="8">8º</option>
-                            <option value="9">9º</option>
+                            {[9, 8, 7, 6, 5, 4, 3, 2, 1]
+                              .filter((value) => !usedFinalPlacements.has(value) || row.colocacaoFinal === value)
+                              .map((value) => (
+                                <option key={value} value={String(value)}>
+                                  {value}º
+                                </option>
+                              ))}
                           </select>
                         </td>
                       ) : (
@@ -1389,6 +1416,41 @@ export default function DiaDePoker() {
             </tbody>
           </table>
         </div>
+
+        {!isFinalMesa ? (
+          <div className="flex flex-wrap items-end gap-3 rounded-xl border border-[#1e3d4f] bg-[#091c2a] p-3">
+            <label className="grid min-w-[220px] flex-1 gap-2 text-sm text-slate-300">
+              Adicionar jogador
+              <select
+                className="w-full rounded-lg border border-[#3b5c73] bg-[#0b1d2b] px-3 py-2 text-slate-100 outline-none transition focus:border-[#ff7e38]"
+                value={novoJogadorByMesa[mesa]}
+                onChange={(event) =>
+                  setNovoJogadorByMesa((current) => ({
+                    ...current,
+                    [mesa]: event.target.value,
+                  }))
+                }
+                disabled={blocked}
+              >
+                <option value="">Selecione...</option>
+                {availablePlayers.map((item) => (
+                  <option key={item.id} value={String(item.id)}>
+                    {item.nome}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <button
+              type="button"
+              onClick={() => void handleAddJogador(mesa as 1 | 2 | 3)}
+              disabled={blocked || !novoJogadorByMesa[mesa]}
+              className="rounded-lg bg-[#ff5e00] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#ff7d32] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Adicionar
+            </button>
+          </div>
+        ) : null}
       </div>
     );
   };
