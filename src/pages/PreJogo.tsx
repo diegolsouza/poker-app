@@ -138,6 +138,15 @@ function parsePersistedState(payload: PersistedPreJogoState | null | undefined):
   };
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export default function PreJogo() {
   const [etapas, setEtapas] = useState<Etapa[]>([]);
   const [jogadores, setJogadores] = useState<Jogador[]>([]);
@@ -508,6 +517,10 @@ export default function PreJogo() {
       await new Promise<void>((resolve) => {
         requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
       });
+
+      await new Promise<void>((resolve) => {
+        window.setTimeout(() => resolve(), 250);
+      });
     };
 
     const printWindow = window.open('', '_blank', 'width=1200,height=800');
@@ -519,6 +532,7 @@ export default function PreJogo() {
 
     doc.open();
     doc.write(`
+      <!doctype html>
       <html>
         <head>
           <meta charset="utf-8" />
@@ -545,9 +559,13 @@ export default function PreJogo() {
 
     printWindow.onafterprint = cleanup;
     printWindow.focus();
-    printWindow.print();
 
-    window.setTimeout(cleanup, 30000);
+    window.setTimeout(() => {
+      printWindow.print();
+    }, 200);
+
+    // Fallback apenas para evitar janela esquecida aberta em navegadores sem afterprint.
+    window.setTimeout(cleanup, 300000);
   };
 
   const handleImprimirFichaMesa = async () => {
@@ -561,11 +579,39 @@ export default function PreJogo() {
 
     const etapaLabel = etapaSelecionadaLabel;
     const logoUrl = logo;
+    const etapaLabelSafe = escapeHtml(etapaLabel);
     const pagesHtml = sorteio.tables
       .map((table, tableIndex) => {
         const rowsHtml = Array.from({ length: 9 }, (_, seatIndex) => {
           const playerId = table[seatIndex];
-          const playerName = playerId ? jogadorNomeMap.get(playerId) ?? `Jogador #${playerId}` : '';
+          if (playerId === undefined || playerId === null) {
+            return `
+              <tr>
+                <td class="num-col">${seatIndex + 1}</td>
+                <td class="mark-col"><span class="circle"></span></td>
+                <td class="name-col"></td>
+                <td class="mark-col"><span class="circle"></span></td>
+                <td class="rebuy-col">
+                  <div class="rebuy-grid">
+                    ${Array.from({ length: 10 }, () => '<span class="circle small"></span>').join('')}
+                  </div>
+                </td>
+                <td class="mark-col"><span class="circle"></span></td>
+                <td class="money-col"></td>
+                <td class="mark-col"><span class="circle"></span></td>
+                <td class="money-col"></td>
+                <td class="mark-col"><span class="circle"></span></td>
+                <td class="mark-col"><span class="circle"></span></td>
+                <td class="place-col"></td>
+              </tr>
+            `;
+          }
+
+          const resolvedName =
+            jogadorNomeMap.get(playerId) ??
+            jogadores.find((jogador) => jogador.id === Number(playerId))?.nome ??
+            `Jogador #${playerId}`;
+          const playerName = escapeHtml(resolvedName);
 
           return `
             <tr>
@@ -599,7 +645,7 @@ export default function PreJogo() {
                 </div>
               </div>
               <div class="meta">
-                <p><strong>Etapa:</strong> ${etapaLabel}</p>
+                <p><strong>Etapa:</strong> ${etapaLabelSafe}</p>
                 <p><strong>Data:</strong> ____/____/______</p>
               </div>
             </div>
