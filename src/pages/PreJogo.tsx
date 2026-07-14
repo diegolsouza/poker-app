@@ -153,6 +153,7 @@ export default function PreJogo() {
   const [isSyncing, setIsSyncing] = useState(false);
   const mesasExportRef = useRef<HTMLDivElement | null>(null);
   const isRemoteTableAvailableRef = useRef<boolean>(true);
+  const hydratedEtapaIdRef = useRef<string>('');
   const adminLoggedIn = isAdminAuthenticated();
 
   useEffect(() => {
@@ -198,6 +199,8 @@ export default function PreJogo() {
   }, []);
 
   useEffect(() => {
+    hydratedEtapaIdRef.current = '';
+
     const restoreFromLocalStorage = () => {
       const storageKey = getStorageKeyForEtapa(etapaId);
       const persistedRaw = localStorage.getItem(storageKey);
@@ -208,6 +211,7 @@ export default function PreJogo() {
         setCanResortAfterNewPlayer(false);
         setLatePlayerId('');
         setSorteio({ tables: [], drawnAt: null });
+        hydratedEtapaIdRef.current = etapaId;
         return;
       }
 
@@ -232,6 +236,7 @@ export default function PreJogo() {
         setCanResortAfterNewPlayer(false);
         setLatePlayerId('');
         setSorteio({ tables: [], drawnAt: null });
+        hydratedEtapaIdRef.current = etapaId;
       }
     };
 
@@ -241,6 +246,7 @@ export default function PreJogo() {
       setCanResortAfterNewPlayer(false);
       setLatePlayerId('');
       setSorteio({ tables: [], drawnAt: null });
+      hydratedEtapaIdRef.current = '';
       return;
     }
 
@@ -252,6 +258,7 @@ export default function PreJogo() {
       if (!isRemoteTableAvailableRef.current) {
         restoreFromLocalStorage();
         setIsSyncing(false);
+        hydratedEtapaIdRef.current = etapaId;
         return;
       }
 
@@ -270,6 +277,7 @@ export default function PreJogo() {
         setSyncWarning('Sincronização entre dispositivos indisponível: tabela pre_jogo_etapa não encontrada. Usando somente este dispositivo.');
         restoreFromLocalStorage();
         setIsSyncing(false);
+        hydratedEtapaIdRef.current = etapaId;
         return;
       }
 
@@ -278,6 +286,7 @@ export default function PreJogo() {
       if (!data) {
         restoreFromLocalStorage();
         setIsSyncing(false);
+        hydratedEtapaIdRef.current = etapaId;
         return;
       }
 
@@ -301,6 +310,7 @@ export default function PreJogo() {
       setError(null);
       setSuccess(null);
       setIsSyncing(false);
+      hydratedEtapaIdRef.current = etapaId;
     };
 
     void restoreState();
@@ -335,6 +345,11 @@ export default function PreJogo() {
 
   useEffect(() => {
     if (!etapaId) {
+      return;
+    }
+
+    // Avoid writing stale state from previous etapa while hydration is in progress.
+    if (hydratedEtapaIdRef.current !== etapaId) {
       return;
     }
 
