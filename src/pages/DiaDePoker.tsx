@@ -77,6 +77,7 @@ const PUBLIC_TABS: TabKey[] = ['mesa1', 'mesa2', 'mesa3', 'mesaFinal'];
 const ADMIN_TABS: TabKey[] = ['admin', 'mesa1', 'mesa2', 'mesa3', 'mesaFinal'];
 const ALL_MESAS: MesaId[] = [1, 2, 3, 4];
 const ENABLE_SPEECH_TO_TEXT = false;
+const FINAL_SEAT_LABELS = ['D', 'SB', 'BB', '4', '5', '6', '7', '8', '9'] as const;
 
 const EMPTY_MESAS: MesaRowsState = {
   1: [],
@@ -118,6 +119,17 @@ function parseMesaFromTab(tab: TabKey): MesaId | null {
   if (tab === 'mesa3') return 3;
   if (tab === 'mesaFinal') return 4;
   return null;
+}
+
+function shuffleRows(rows: MesaPlayerRow[]): MesaPlayerRow[] {
+  const shuffled = [...rows];
+
+  for (let i = shuffled.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+
+  return shuffled;
 }
 
 function buildMesasFromSources(
@@ -759,9 +771,8 @@ export default function DiaDePoker() {
 
     setMesas((current) => {
       const without = current[fromMesa].filter((item) => item.jogadorId !== jogadorId);
-      const nextTarget = [...current[toMesa].filter((item) => item.jogadorId !== jogadorId), row].sort((a, b) =>
-        a.nome.localeCompare(b.nome),
-      );
+      const nextTargetBase = [...current[toMesa].filter((item) => item.jogadorId !== jogadorId), row];
+      const nextTarget = toMesa === 4 ? shuffleRows(nextTargetBase) : nextTargetBase.sort((a, b) => a.nome.localeCompare(b.nome));
 
       const normalizedTarget = nextTarget.map((item) => {
         if (toMesa !== 4) {
@@ -1356,6 +1367,7 @@ export default function DiaDePoker() {
               ) : (
                 rows.map((row) => {
                   const highlighted = flashByMesa[mesa] === row.jogadorId;
+                  const finalSeatLabel = isFinalMesa ? FINAL_SEAT_LABELS[rows.findIndex((item) => item.jogadorId === row.jogadorId)] : null;
 
                   return (
                     <tr
@@ -1367,7 +1379,18 @@ export default function DiaDePoker() {
                         .filter(Boolean)
                         .join(' ')}
                     >
-                      <td className="px-3 py-2 font-medium text-slate-100">{row.nome}</td>
+                      <td className="px-3 py-2 font-medium text-slate-100">
+                        {isFinalMesa ? (
+                          <span className="inline-flex items-center gap-2">
+                            <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                              {finalSeatLabel}
+                            </span>
+                            <span>{row.nome}</span>
+                          </span>
+                        ) : (
+                          row.nome
+                        )}
+                      </td>
 
                       {isFinalMesa ? (
                         <td className="px-3 py-2">
