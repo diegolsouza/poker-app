@@ -359,12 +359,12 @@ export default function DiaDePoker() {
       return false;
     }
 
-    const { error: upsertError } = await supabase
+    const { error: insertError } = await supabase
       .from('registros_mesas_temp')
-      .upsert(payload, { onConflict: 'etapa_id,jogador_id,numero_mesa' });
+      .insert(payload);
 
-    if (upsertError) {
-      setError(`Erro ao salvar registro na mesa: ${upsertError.message}`);
+    if (insertError) {
+      setError(`Erro ao salvar registro na mesa: ${insertError.message}`);
       return false;
     }
 
