@@ -114,7 +114,6 @@ function getResumoContaItens(row: TabelaAcertoRow): Array<{ label: string; valor
     { label: 'Premiação', valor: row.premioColocacao },
     { label: 'Reembolso custo salão', valor: row.reembolsoSalao },
     { label: 'Reembolso custo janta', valor: row.reembolsoJanta },
-    { label: 'Outros reembolsos', valor: row.outrosReembolsos },
   ].filter((item) => Math.abs(item.valor) > 0.0001);
 }
 
@@ -249,6 +248,15 @@ export default function TelaPix() {
     const totalRebuys = registros.reduce((sum, r) => sum + toNumber(r.rebuys), 0);
     const totalAddons = registros.filter((r) => r.fez_addon).length;
 
+    const totalEntradasBuyIn = totalJogadores * configuracoes.buy_in;
+    const totalEntradasRebuy = totalRebuys * configuracoes.rebuy;
+    const totalEntradasAddon = totalAddons * configuracoes.add_on;
+    const totalEntradasEtapa = totalEntradasBuyIn + totalEntradasRebuy + totalEntradasAddon;
+    const totalSaidasSalao = totalPagouSalao;
+    const totalSaidasJanta = totalPagouJanta;
+    const totalSaidasEtapa = totalSaidasSalao + totalSaidasJanta;
+    const saldoContaEtapa = totalEntradasEtapa - totalSaidasEtapa;
+
     const qtdRateioSalao = registros.filter((r) => r.tipo_participante === 'jogador').length;
     const qtdRateioJanta = registros.filter((r) => r.jantou && !r.cozinheiro).length;
 
@@ -333,6 +341,14 @@ export default function TelaPix() {
       totalOutrosCustos,
       totalRebuys,
       totalAddons,
+      totalEntradasBuyIn,
+      totalEntradasRebuy,
+      totalEntradasAddon,
+      totalEntradasEtapa,
+      totalSaidasSalao,
+      totalSaidasJanta,
+      totalSaidasEtapa,
+      saldoContaEtapa,
       rateioSalaoPorPessoa,
       rateioJantaPorPessoa,
       acumuladoTemporada,
@@ -391,14 +407,13 @@ export default function TelaPix() {
 
   const totaisResumoConta = useMemo(() => {
     if (!participanteSelecionado) {
-      return { totalGanhos: 0, totalCustos: 0 };
+      return { totalGanhos: 0, totalCustos: 0, saldoEtapa: 0, totalExtrasCaixinha: 0 };
     }
 
     const totalGanhos =
       participanteSelecionado.premioColocacao +
       participanteSelecionado.reembolsoSalao +
-      participanteSelecionado.reembolsoJanta +
-      participanteSelecionado.outrosReembolsos;
+      participanteSelecionado.reembolsoJanta;
 
     const totalCustos =
       participanteSelecionado.custoBuyIn +
@@ -407,7 +422,10 @@ export default function TelaPix() {
       participanteSelecionado.cotaSalao +
       participanteSelecionado.cotaJanta;
 
-    return { totalGanhos, totalCustos };
+    const saldoEtapa = totalGanhos - totalCustos;
+    const totalExtrasCaixinha = participanteSelecionado.outrosReembolsos;
+
+    return { totalGanhos, totalCustos, saldoEtapa, totalExtrasCaixinha };
   }, [participanteSelecionado]);
 
   useEffect(() => {
@@ -531,10 +549,38 @@ export default function TelaPix() {
               </div>
             </article>
 
-            <article className="rounded-xl border border-[#244357] bg-[#0b1a25] p-3 sm:col-span-2 xl:col-span-2">
+            <article className="rounded-xl border border-[#244357] bg-[#0b1a25] p-3 sm:col-span-2 xl:col-span-1">
               <p className="text-xs font-semibold uppercase tracking-wide text-[#ff9a63]">📦 Acumulados</p>
               <p className="mt-2 text-sm text-slate-200">🏁 Final: {formatCurrency(calculos.acumuladoTemporada)}</p>
               <p className="text-sm text-slate-200">🪙 Caixinha: {formatCurrency(calculos.acumuladoCaixinha)}</p>
+            </article>
+
+            <article className="rounded-xl border border-[#244357] bg-[#0b1a25] p-3 sm:col-span-2 xl:col-span-1">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#ff9a63]">🧾 Conta da Etapa</p>
+
+              <div className="mt-2 space-y-1.5 text-xs text-slate-300">
+                <p className="font-semibold text-emerald-300">Entradas</p>
+                <p>Buy-in: {formatCurrency(calculos.totalEntradasBuyIn)}</p>
+                <p>Rebuy: {formatCurrency(calculos.totalEntradasRebuy)}</p>
+                <p>Add-on: {formatCurrency(calculos.totalEntradasAddon)}</p>
+                <p className="font-semibold text-emerald-200">Total entradas: {formatCurrency(calculos.totalEntradasEtapa)}</p>
+              </div>
+
+              <div className="mt-3 space-y-1.5 text-xs text-slate-300">
+                <p className="font-semibold text-rose-300">Saídas</p>
+                <p>Janta: {formatCurrency(calculos.totalSaidasJanta)}</p>
+                <p>Salão: {formatCurrency(calculos.totalSaidasSalao)}</p>
+                <p className="font-semibold text-rose-200">Total saídas: {formatCurrency(calculos.totalSaidasEtapa)}</p>
+              </div>
+
+              <p
+                className={`mt-3 text-sm font-semibold ${
+                  calculos.saldoContaEtapa >= 0 ? 'text-emerald-300' : 'text-rose-300'
+                }`}
+              >
+                Saldo da etapa: {formatCurrency(calculos.saldoContaEtapa)}
+              </p>
+              <p className="mt-1 text-[11px] text-slate-400">Custos Extras ficam fora da conta da etapa e saem da Caixinha do Grupo.</p>
             </article>
           </div>
         </section>
@@ -702,14 +748,14 @@ export default function TelaPix() {
                   <p className="text-[11px] uppercase tracking-wide text-slate-400">Saldo</p>
                   <p
                     className={`mt-1 text-sm font-semibold ${
-                      participanteSelecionado.valorFinalLiquido > 0
+                      totaisResumoConta.saldoEtapa > 0
                         ? 'text-emerald-300'
-                        : participanteSelecionado.valorFinalLiquido < 0
+                        : totaisResumoConta.saldoEtapa < 0
                           ? 'text-rose-300'
                           : 'text-slate-200'
                     }`}
                   >
-                    {formatCurrency(participanteSelecionado.valorFinalLiquido)}
+                    {formatCurrency(totaisResumoConta.saldoEtapa)}
                   </p>
                 </div>
               </div>
@@ -734,18 +780,23 @@ export default function TelaPix() {
             </div>
 
             <footer className="mt-4 border-t border-[#244357] pt-3">
+              <div className="mb-2 flex items-center justify-between rounded-lg border border-[#2f5268] bg-[#102536] px-3 py-2">
+                <span className="text-sm text-slate-300">Custos Extras (Caixinha do Grupo)</span>
+                <span className="text-sm font-semibold text-sky-300">{formatCurrency(totaisResumoConta.totalExtrasCaixinha)}</span>
+              </div>
+
               <div className="flex items-center justify-between rounded-lg bg-[#081723] px-3 py-2">
-                <span className="text-sm text-slate-300">Resultado final</span>
+                <span className="text-sm text-slate-300">Resultado da conta da etapa</span>
                 <span
                   className={`text-base font-semibold ${
-                    participanteSelecionado.valorFinalLiquido > 0
+                    totaisResumoConta.saldoEtapa > 0
                       ? 'text-emerald-300'
-                      : participanteSelecionado.valorFinalLiquido < 0
+                      : totaisResumoConta.saldoEtapa < 0
                         ? 'text-rose-300'
                         : 'text-slate-200'
                   }`}
                 >
-                  {formatCurrency(participanteSelecionado.valorFinalLiquido)}
+                  {formatCurrency(totaisResumoConta.saldoEtapa)}
                 </span>
               </div>
             </footer>
