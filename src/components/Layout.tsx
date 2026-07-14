@@ -6,6 +6,7 @@ import { isAdminAuthenticated, logoutAdmin } from '../utils/adminAuth';
 const commonNavItems = [
   { label: 'Ranking', to: '/' },
   { label: 'Pré-jogo', to: '/pre-jogo' },
+  { label: 'Dia de Poker', to: '/dia-de-poker' },
   { label: 'Financeiro', to: '/financeiro' },
   { label: 'Premiação Final', to: '/premiacao-final' },
   { label: 'Regras', to: '/regras' },

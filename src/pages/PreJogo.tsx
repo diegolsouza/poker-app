@@ -515,6 +515,7 @@ export default function PreJogo() {
     }
 
     const etapaLabel = etapaSelecionadaLabel;
+    const logoUrl = `${window.location.origin}/logo.png`;
     const pagesHtml = sorteio.tables
       .map((table, tableIndex) => {
         const rowsHtml = Array.from({ length: 9 }, (_, seatIndex) => {
@@ -546,14 +547,15 @@ export default function PreJogo() {
         return `
           <section class="print-page">
             <div class="header">
-              <div>
-                <h1>Ficha de Anotação - OCR</h1>
-                <p><strong>Etapa:</strong> ${etapaLabel}</p>
-                <p><strong>Mesa:</strong> ${tableIndex + 1}</p>
+              <div class="brand">
+                <img src="${logoUrl}" alt="Poker Uplife" />
+                <div>
+                  <h1>Ficha de Anotação Mesa ${tableIndex + 1}</h1>
+                </div>
               </div>
               <div class="meta">
+                <p><strong>Etapa:</strong> ${etapaLabel}</p>
                 <p><strong>Data:</strong> ____/____/______</p>
-                <p><strong>Início:</strong> ____:____</p>
               </div>
             </div>
 
@@ -578,8 +580,6 @@ export default function PreJogo() {
                 ${rowsHtml}
               </tbody>
             </table>
-
-            <p class="hint">Pinte os círculos e preencha valores em letra de forma para facilitar OCR.</p>
           </section>
         `;
       })
@@ -589,7 +589,7 @@ export default function PreJogo() {
       openPrintWindow(
         `Fichas de Mesa - ${etapaLabel}`,
         pagesHtml,
-        '@page { size: A4 landscape; margin: 10mm; } * { box-sizing: border-box; } body { margin: 0; font-family: Arial, sans-serif; color: #111; } .print-page { page-break-after: always; min-height: 180mm; } .print-page:last-child { page-break-after: auto; } .header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 8px; } h1 { margin: 0 0 4px 0; font-size: 16px; } p { margin: 2px 0; font-size: 10px; } .meta { text-align: right; } table { width: 100%; border-collapse: collapse; table-layout: fixed; } th, td { border: 1px solid #333; padding: 3px; font-size: 9px; text-align: center; height: 24px; vertical-align: middle; } th { background: #f0f0f0; font-size: 8px; } .num-col { width: 30px; font-weight: 700; } .mark-col { width: 34px; } .name-col { width: 220px; text-align: left; font-weight: 700; } .rebuy-col { width: 220px; } .money-col { width: 78px; } .place-col { width: 58px; } .circle { display: inline-block; width: 13px; height: 13px; border: 1.5px solid #111; border-radius: 999px; } .circle.small { width: 11px; height: 11px; } .rebuy-grid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 2px; align-items: center; } .hint { margin-top: 6px; font-size: 9px; color: #444; }',
+        '@page { size: A4 landscape; margin: 10mm; } * { box-sizing: border-box; } body { margin: 0; font-family: Arial, sans-serif; color: #111; } .print-page { page-break-after: always; min-height: 180mm; } .print-page:last-child { page-break-after: auto; } .header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 8px; } .brand { display: flex; align-items: center; gap: 10px; } .brand img { width: 44px; height: auto; object-fit: contain; } h1 { margin: 0 0 4px 0; font-size: 16px; } p { margin: 2px 0; font-size: 10px; } .meta { text-align: right; } table { width: 100%; border-collapse: collapse; table-layout: fixed; } th, td { border: 1px solid #333; padding: 3px; font-size: 9px; text-align: center; height: 24px; vertical-align: middle; } th { background: #f0f0f0; font-size: 8px; } .num-col { width: 30px; font-weight: 700; } .mark-col { width: 34px; } .name-col { width: 220px; text-align: left; font-weight: 700; } .rebuy-col { width: 220px; } .money-col { width: 78px; } .place-col { width: 58px; } .circle { display: inline-block; width: 13px; height: 13px; border: 1.5px solid #111; border-radius: 999px; } .circle.small { width: 11px; height: 11px; } .rebuy-grid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 2px; align-items: center; }',
       );
       setSuccess('Fichas por mesa abertas para impressão.');
     } catch (printError) {

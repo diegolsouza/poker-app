@@ -4,6 +4,7 @@ import RequireAdminAuth from './components/RequireAdminAuth';
 import AdminLogin from './pages/AdminLogin';
 import CadastroBasico from './pages/CadastroBasico';
 import Configuracoes from './pages/Configuracoes';
+import DiaDePoker from './pages/DiaDePoker';
 import PremiacaoFinal from './pages/PremiacaoFinal';
 import PreJogo from './pages/PreJogo';
 import Regras from './pages/Regras';
@@ -19,6 +20,7 @@ function App() {
 					<Route index element={<RankingGeral />} />
 					<Route path="admin/login" element={<AdminLogin />} />
 					<Route path="pre-jogo" element={<PreJogo />} />
+					<Route path="dia-de-poker" element={<DiaDePoker />} />
 					<Route path="admin" element={<RequireAdminAuth />}>
 						<Route path="cadastro-basico" element={<CadastroBasico />} />
 						<Route path="resultados" element={<RegistroResultados />} />

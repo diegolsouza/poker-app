@@ -19,6 +19,10 @@ type Configuracao = {
   custo_salao: number;
 };
 
+type PreJogoEtapaRow = {
+  participant_ids: number[] | null;
+};
+
 type RegistroFormRow = {
   id: string;
   jogadorId: string;
@@ -284,6 +288,23 @@ function createEmptyRow(): RegistroFormRow {
   };
 }
 
+function createFilledRow(jogadorId: string): RegistroFormRow {
+  return {
+    id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    jogadorId,
+    tipo: 'jogador',
+    cozinheiro: false,
+    jantou: false,
+    melhorMao: false,
+    colocacao: '',
+    rebuys: '0',
+    fezAddon: false,
+    pagouSalao: false,
+    pagouJanta: '',
+    outrosCustos: '',
+  };
+}
+
 function ensureTrailingEmptyRow(rows: RegistroFormRow[]): RegistroFormRow[] {
   if (rows.length === 0) {
     return [createEmptyRow()];
@@ -296,6 +317,8 @@ function ensureTrailingEmptyRow(rows: RegistroFormRow[]): RegistroFormRow[] {
 
   return rows;
 }
+
+const SHOW_OCR_TOOLS = false;
 
 export default function RegistroResultados() {
   const [etapas, setEtapas] = useState<Etapa[]>([]);
@@ -373,6 +396,43 @@ export default function RegistroResultados() {
 
     void loadData();
   }, []);
+
+  useEffect(() => {
+    const loadPreJogoParticipants = async () => {
+      if (!etapaId || jogadores.length === 0) {
+        setRows([createEmptyRow()]);
+        return;
+      }
+
+      const { data, error: preJogoError } = await supabase
+        .from('pre_jogo_etapa')
+        .select('participant_ids')
+        .eq('etapa_id', Number(etapaId))
+        .maybeSingle();
+
+      if (preJogoError) {
+        setError(`Não foi possível carregar participantes do Pré-jogo para esta etapa: ${preJogoError.message}`);
+        setRows([createEmptyRow()]);
+        return;
+      }
+
+      const participantIds = (data as PreJogoEtapaRow | null)?.participant_ids ?? [];
+      const activeJogadoresSet = new Set(jogadores.map((jogador) => jogador.id));
+      const availableParticipantIds = Array.from(new Set(participantIds)).filter((id) => activeJogadoresSet.has(id));
+
+      if (availableParticipantIds.length === 0) {
+        setRows([createEmptyRow()]);
+        return;
+      }
+
+      const preloadedRows = availableParticipantIds.map((id) => createFilledRow(String(id)));
+      setRows(ensureTrailingEmptyRow(preloadedRows));
+      setSuccess(`Lista manual pré-carregada com ${availableParticipantIds.length} participante(s) do Pré-jogo.`);
+      setError(null);
+    };
+
+    void loadPreJogoParticipants();
+  }, [etapaId, jogadores]);
 
   const resetForm = () => {
     setRows([createEmptyRow()]);
@@ -1063,7 +1123,8 @@ export default function RegistroResultados() {
         </header>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="rounded-2xl border border-[#244357] bg-[#0b1a25] p-4">
+          {SHOW_OCR_TOOLS ? (
+            <div className="rounded-2xl border border-[#244357] bg-[#0b1a25] p-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-sm font-semibold text-slate-100">Importar por foto (OCR)</h2>
@@ -1191,7 +1252,8 @@ export default function RegistroResultados() {
             ) : null}
 
             {ocrError ? <p className="mt-3 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">{ocrError}</p> : null}
-          </div>
+            </div>
+          ) : null}
 
           <div className="rounded-2xl border border-[#244357] bg-[#0b1a25] p-4">
             <div className="mb-3 flex items-center justify-between gap-4">
@@ -1203,23 +1265,32 @@ export default function RegistroResultados() {
               <table className="min-w-[1140px] w-full border-collapse text-[11px] leading-tight text-slate-200">
                 <thead className="bg-[#102536] text-slate-100">
                   <tr>
+                    <th className="w-[56px] px-1 py-1.5 text-center font-semibold">Janta</th>
                     <th className="w-[140px] px-1 py-1.5 text-left font-semibold">Nome</th>
                     <th className="w-[58px] px-1 py-1.5 text-left font-semibold">Tipo</th>
-                    <th className="w-[58px] px-1 py-1.5 text-left font-semibold">Colocação</th>
-                    <th className="w-[56px] px-1 py-1.5 text-center font-semibold">Chef</th>
-                    <th className="w-[56px] px-1 py-1.5 text-center font-semibold">Jantou</th>
-                    <th className="w-[62px] px-1 py-1.5 text-center font-semibold">M. Mão</th>
                     <th className="w-[56px] px-1 py-1.5 text-left font-semibold">Rebuys</th>
                     <th className="w-[56px] px-1 py-1.5 text-center font-semibold">Add On</th>
-                    <th className="w-[56px] px-1 py-1.5 text-center font-semibold">Salão</th>
                     <th className="w-[74px] px-1 py-1.5 text-left font-semibold">Pagou Janta</th>
+                    <th className="w-[56px] px-1 py-1.5 text-center font-semibold">Salão</th>
                     <th className="w-[74px] px-1 py-1.5 text-left font-semibold">Outros Custos</th>
+                    <th className="w-[56px] px-1 py-1.5 text-center font-semibold">Chef</th>
+                    <th className="w-[62px] px-1 py-1.5 text-center font-semibold">Melhor Mão</th>
+                    <th className="w-[58px] px-1 py-1.5 text-left font-semibold">Colocação</th>
                     <th className="w-[46px] px-1 py-1.5 text-center font-semibold">Rem.</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((row) => (
                     <tr key={row.id} className="border-t border-[#244357]">
+                      <td className="px-1 py-1.5 text-center">
+                        <input
+                          type="checkbox"
+                          checked={row.jantou}
+                          onChange={(event) => updateRow(row.id, (current) => ({ ...current, jantou: event.target.checked }))}
+                          disabled={isDisabled || !row.jogadorId || row.cozinheiro}
+                          className="h-4 w-4 rounded border-slate-500 bg-[#0b1a25]"
+                        />
+                      </td>
                       <td className="px-1 py-1.5">
                         <select
                           value={row.jogadorId}
@@ -1247,49 +1318,6 @@ export default function RegistroResultados() {
                         </select>
                       </td>
                       <td className="px-1 py-1.5">
-                        <select
-                          value={row.colocacao}
-                          onChange={(event) => updateRow(row.id, (current) => ({ ...current, colocacao: event.target.value }))}
-                          disabled={isDisabled || !row.jogadorId || row.tipo === 'visitante'}
-                          className="h-9 w-full rounded-lg border border-[#244357] bg-[#081723] px-1.5 text-[10px] text-slate-50 outline-none transition focus:border-[#ff5e00] disabled:opacity-50"
-                        >
-                          <option value="">-</option>
-                          {Array.from({ length: 9 }, (_, index) => index + 1).map((posicao) => (
-                            <option key={posicao} value={posicao}>
-                              {posicao}º
-                            </option>
-                          ))}
-                          <option value="10">10º+</option>
-                        </select>
-                      </td>
-                      <td className="px-1 py-1.5 text-center">
-                        <input
-                          type="checkbox"
-                          checked={row.cozinheiro}
-                          onChange={(event) => handleCozinheiroChange(row.id, event.target.checked)}
-                          disabled={isDisabled || !row.jogadorId}
-                          className="h-4 w-4 rounded border-slate-500 bg-[#0b1a25]"
-                        />
-                      </td>
-                      <td className="px-1 py-1.5 text-center">
-                        <input
-                          type="checkbox"
-                          checked={row.jantou}
-                          onChange={(event) => updateRow(row.id, (current) => ({ ...current, jantou: event.target.checked }))}
-                          disabled={isDisabled || !row.jogadorId || row.cozinheiro}
-                          className="h-4 w-4 rounded border-slate-500 bg-[#0b1a25]"
-                        />
-                      </td>
-                      <td className="px-1 py-1.5 text-center">
-                        <input
-                          type="checkbox"
-                          checked={row.melhorMao}
-                          onChange={(event) => updateRow(row.id, (current) => ({ ...current, melhorMao: event.target.checked }))}
-                          disabled={isDisabled || !row.jogadorId}
-                          className="h-4 w-4 rounded border-slate-500 bg-[#0b1a25]"
-                        />
-                      </td>
-                      <td className="px-1 py-1.5">
                         <input
                           type="number"
                           min={0}
@@ -1309,6 +1337,18 @@ export default function RegistroResultados() {
                           className="h-4 w-4 rounded border-slate-500 bg-[#0b1a25]"
                         />
                       </td>
+                      <td className="px-1 py-1.5">
+                        <input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={row.pagouJanta}
+                          onChange={(event) => updateRow(row.id, (current) => ({ ...current, pagouJanta: event.target.value }))}
+                          disabled={isDisabled || !row.jogadorId}
+                          className="h-9 w-full rounded-lg border border-[#244357] bg-[#081723] px-1.5 text-[10px] text-slate-50 outline-none transition focus:border-[#ff5e00]"
+                          placeholder="0,00"
+                        />
+                      </td>
                       <td className="px-1 py-1.5 text-center">
                         <input
                           type="checkbox"
@@ -1323,24 +1363,46 @@ export default function RegistroResultados() {
                           type="number"
                           min={0}
                           step="0.01"
-                          value={row.pagouJanta}
-                          onChange={(event) => updateRow(row.id, (current) => ({ ...current, pagouJanta: event.target.value }))}
-                          disabled={isDisabled || !row.jogadorId}
-                          className="h-9 w-full rounded-lg border border-[#244357] bg-[#081723] px-1.5 text-[10px] text-slate-50 outline-none transition focus:border-[#ff5e00]"
-                          placeholder="0,00"
-                        />
-                      </td>
-                      <td className="px-1 py-1.5">
-                        <input
-                          type="number"
-                          min={0}
-                          step="0.01"
                           value={row.outrosCustos}
                           onChange={(event) => updateRow(row.id, (current) => ({ ...current, outrosCustos: event.target.value }))}
                           disabled={isDisabled || !row.jogadorId}
                           className="h-9 w-full rounded-lg border border-[#244357] bg-[#081723] px-1.5 text-[10px] text-slate-50 outline-none transition focus:border-[#ff5e00]"
                           placeholder="0,00"
                         />
+                      </td>
+                      <td className="px-1 py-1.5 text-center">
+                        <input
+                          type="checkbox"
+                          checked={row.cozinheiro}
+                          onChange={(event) => handleCozinheiroChange(row.id, event.target.checked)}
+                          disabled={isDisabled || !row.jogadorId}
+                          className="h-4 w-4 rounded border-slate-500 bg-[#0b1a25]"
+                        />
+                      </td>
+                      <td className="px-1 py-1.5 text-center">
+                        <input
+                          type="checkbox"
+                          checked={row.melhorMao}
+                          onChange={(event) => updateRow(row.id, (current) => ({ ...current, melhorMao: event.target.checked }))}
+                          disabled={isDisabled || !row.jogadorId}
+                          className="h-4 w-4 rounded border-slate-500 bg-[#0b1a25]"
+                        />
+                      </td>
+                      <td className="px-1 py-1.5">
+                        <select
+                          value={row.colocacao}
+                          onChange={(event) => updateRow(row.id, (current) => ({ ...current, colocacao: event.target.value }))}
+                          disabled={isDisabled || !row.jogadorId || row.tipo === 'visitante'}
+                          className="h-9 w-full rounded-lg border border-[#244357] bg-[#081723] px-1.5 text-[10px] text-slate-50 outline-none transition focus:border-[#ff5e00] disabled:opacity-50"
+                        >
+                          <option value="">-</option>
+                          {Array.from({ length: 9 }, (_, index) => index + 1).map((posicao) => (
+                            <option key={posicao} value={posicao}>
+                              {posicao}º
+                            </option>
+                          ))}
+                          <option value="10">10º+</option>
+                        </select>
                       </td>
                       <td className="px-1 py-1.5 text-center">
                         <button
@@ -1373,7 +1435,7 @@ export default function RegistroResultados() {
         </form>
       </section>
 
-      {isCameraModalOpen ? (
+      {SHOW_OCR_TOOLS && isCameraModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#01060c]/75 p-3 backdrop-blur-[2px] sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-label="Capturar foto da anotação">
           <button type="button" className="absolute inset-0 cursor-default" aria-label="Fechar captura" onClick={handleCloseCameraModal} />
 
@@ -1422,7 +1484,7 @@ export default function RegistroResultados() {
         </div>
       ) : null}
 
-      <iframe ref={printFrameRef} title="print-ocr-template" className="hidden" />
+      {SHOW_OCR_TOOLS ? <iframe ref={printFrameRef} title="print-ocr-template" className="hidden" /> : null}
     </main>
   );
 }
