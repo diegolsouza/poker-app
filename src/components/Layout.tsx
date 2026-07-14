@@ -25,7 +25,13 @@ export default function Layout() {
   const adminLoggedIn = isAdminAuthenticated();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const visibleCommonNavItems = adminLoggedIn
-    ? commonNavItems.filter((item) => item.to !== '/' && item.to !== '/financeiro' && item.to !== '/premiacao-final')
+    ? commonNavItems.filter(
+        (item) =>
+          item.to !== '/' &&
+          item.to !== '/financeiro' &&
+          item.to !== '/premiacao-final' &&
+          item.to !== '/dia-de-poker',
+      )
     : commonNavItems;
 
   // Accessing pathname makes this component re-evaluate auth on route changes.
