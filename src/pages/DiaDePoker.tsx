@@ -168,6 +168,11 @@ export default function DiaDePoker() {
   const [error, setError] = useState<string | null>(null);
   const [speechSupported, setSpeechSupported] = useState<boolean>(false);
   const [listeningMesa, setListeningMesa] = useState<1 | 2 | 3 | null>(null);
+  const [lastVoiceTextByMesa, setLastVoiceTextByMesa] = useState<Record<1 | 2 | 3, string>>({
+    1: '',
+    2: '',
+    3: '',
+  });
   const [flashByMesa, setFlashByMesa] = useState<Record<number, number | null>>({
     1: null,
     2: null,
@@ -178,6 +183,9 @@ export default function DiaDePoker() {
   const keepListeningRef = useRef<boolean>(false);
   const activeMesaRef = useRef<1 | 2 | 3 | null>(null);
   const mountedRef = useRef<boolean>(true);
+  const mesasRef = useRef<MesaRowsState>(EMPTY_MESAS);
+  const selectedEtapaRef = useRef<Etapa | null>(null);
+  const etapaEmAndamentoRef = useRef<boolean>(false);
   const flashTimersRef = useRef<Record<number, ReturnType<typeof setTimeout> | null>>({
     1: null,
     2: null,
@@ -214,6 +222,18 @@ export default function DiaDePoker() {
     () => etapas.filter((item) => item.status === 'pendente' || item.status === 'em_andamento'),
     [etapas],
   );
+
+  useEffect(() => {
+    mesasRef.current = mesas;
+  }, [mesas]);
+
+  useEffect(() => {
+    selectedEtapaRef.current = selectedEtapa;
+  }, [selectedEtapa]);
+
+  useEffect(() => {
+    etapaEmAndamentoRef.current = etapaEmAndamento;
+  }, [etapaEmAndamento]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -527,9 +547,8 @@ export default function DiaDePoker() {
     setError(null);
   };
 
-  const findPlayerForVoice = (mesa: 1 | 2 | 3, transcript: string): MesaPlayerRow | null => {
+  const findPlayerForVoice = (rows: MesaPlayerRow[], transcript: string): MesaPlayerRow | null => {
     const normalizedTranscript = normalizeText(transcript);
-    const rows = mesas[mesa];
 
     if (rows.length === 0) return null;
 
@@ -564,7 +583,10 @@ export default function DiaDePoker() {
   };
 
   const processVoiceTranscript = async (mesa: 1 | 2 | 3, rawText: string) => {
-    if (!selectedEtapa || !etapaEmAndamento) return;
+    const etapaAtual = selectedEtapaRef.current;
+    const etapaAberta = etapaEmAndamentoRef.current;
+
+    if (!etapaAtual || !etapaAberta) return;
 
     const transcript = normalizeText(rawText);
     if (!transcript) return;
@@ -580,15 +602,16 @@ export default function DiaDePoker() {
       ? addonMatch.index ?? transcript.length
       : transcript.length;
 
+    const rowsMesa = mesasRef.current[mesa];
     const probableNamePart = transcript.slice(0, actionIndex).trim();
     const targetText = probableNamePart || transcript;
-    const jogador = findPlayerForVoice(mesa, targetText);
+    const jogador = findPlayerForVoice(rowsMesa, targetText);
 
     if (!jogador) return;
 
     if (rebuyMatch) {
       const nextRebuys = jogador.rebuys + 1;
-      const ok = await upsertMesaRegistro(selectedEtapa.id, jogador.jogadorId, mesa, nextRebuys, jogador.fezAddon);
+      const ok = await upsertMesaRegistro(etapaAtual.id, jogador.jogadorId, mesa, nextRebuys, jogador.fezAddon);
       if (!ok) return;
 
       updateMesaPlayerState(mesa, jogador.jogadorId, (item) => ({ ...item, rebuys: nextRebuys }));
@@ -604,7 +627,7 @@ export default function DiaDePoker() {
         return;
       }
 
-      const ok = await upsertMesaRegistro(selectedEtapa.id, jogador.jogadorId, mesa, jogador.rebuys, true);
+      const ok = await upsertMesaRegistro(etapaAtual.id, jogador.jogadorId, mesa, jogador.rebuys, true);
       if (!ok) return;
 
       updateMesaPlayerState(mesa, jogador.jogadorId, (item) => ({ ...item, fezAddon: true }));
@@ -648,6 +671,11 @@ export default function DiaDePoker() {
 
         const transcript = String(result[0]?.transcript ?? '').trim();
         if (!transcript) continue;
+
+        setLastVoiceTextByMesa((current) => ({
+          ...current,
+          [mesa]: transcript,
+        }));
 
         void processVoiceTranscript(mesa, transcript);
       }
@@ -927,6 +955,13 @@ export default function DiaDePoker() {
         {!speechSupported ? (
           <p className="rounded-xl border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
             Seu navegador não possui suporte para Web Speech API.
+          </p>
+        ) : null}
+
+        {speechSupported ? (
+          <p className="rounded-xl border border-[#2c4e65] bg-[#0a1f2d] px-3 py-2 text-sm text-slate-300">
+            <span className="font-semibold text-slate-100">Último áudio reconhecido:</span>{' '}
+            {lastVoiceTextByMesa[mesa] ? `"${lastVoiceTextByMesa[mesa]}"` : 'aguardando fala...'}
           </p>
         ) : null}
 
