@@ -249,18 +249,26 @@ export default function TelaPix() {
     const totalRebuys = registros.reduce((sum, r) => sum + toNumber(r.rebuys), 0);
     const totalAddons = registros.filter((r) => r.fez_addon).length;
 
-    const totalEntradasBuyIn = totalJogadores * configuracoes.buy_in;
-    const totalEntradasRebuy = totalRebuys * configuracoes.rebuy;
-    const totalEntradasAddon = totalAddons * configuracoes.add_on;
-    const totalEntradasEtapa = totalEntradasBuyIn + totalEntradasRebuy + totalEntradasAddon;
-    const totalSaidasSalao = totalPagouSalao;
-    const totalSaidasJanta = totalPagouJanta;
-
     const qtdRateioSalao = registros.filter((r) => r.tipo_participante === 'jogador').length;
     const qtdRateioJanta = registros.filter((r) => r.jantou && !r.cozinheiro).length;
 
     const rateioSalaoPorPessoa = safeDivide(totalPagouSalao, qtdRateioSalao);
     const rateioJantaPorPessoa = safeDivide(totalPagouJanta, qtdRateioJanta);
+
+    const totalEntradasBuyIn = totalJogadores * configuracoes.buy_in;
+    const totalEntradasRebuy = totalRebuys * configuracoes.rebuy;
+    const totalEntradasAddon = totalAddons * configuracoes.add_on;
+    const totalEntradasRateioSalao = rateioSalaoPorPessoa * qtdRateioSalao;
+    const totalEntradasRateioJanta = rateioJantaPorPessoa * qtdRateioJanta;
+    const totalEntradasEtapa =
+      totalEntradasBuyIn +
+      totalEntradasRebuy +
+      totalEntradasAddon +
+      totalEntradasRateioSalao +
+      totalEntradasRateioJanta;
+
+    const totalSaidasSalao = totalPagouSalao;
+    const totalSaidasJanta = totalPagouJanta;
 
     const acumuladoTemporada = totalJogadores * TEMPORADA_POR_JOGADOR;
     const acumuladoCaixinha = totalJogadores * CAIXINHA_POR_JOGADOR;
@@ -349,6 +357,8 @@ export default function TelaPix() {
       totalEntradasBuyIn,
       totalEntradasRebuy,
       totalEntradasAddon,
+      totalEntradasRateioSalao,
+      totalEntradasRateioJanta,
       totalEntradasEtapa,
       totalSaidasSalao,
       totalSaidasJanta,
@@ -435,6 +445,8 @@ export default function TelaPix() {
 
     return { totalGanhos, totalCustos, saldoEtapa, totalExtrasCaixinha };
   }, [participanteSelecionado]);
+
+  const contaEtapaFechou = useMemo(() => Math.abs(calculos.diferencaConferencia) <= 0.01, [calculos.diferencaConferencia]);
 
   useEffect(() => {
     if (!participanteSelecionado) {
@@ -589,6 +601,8 @@ export default function TelaPix() {
                     <p>Buy-in: {formatCurrency(calculos.totalEntradasBuyIn)}</p>
                     <p>Rebuy: {formatCurrency(calculos.totalEntradasRebuy)}</p>
                     <p>Add-on: {formatCurrency(calculos.totalEntradasAddon)}</p>
+                    <p>Rateio salão (recebido): {formatCurrency(calculos.totalEntradasRateioSalao)}</p>
+                    <p>Rateio janta (recebido): {formatCurrency(calculos.totalEntradasRateioJanta)}</p>
                     <p className="font-semibold text-emerald-200">Total entradas: {formatCurrency(calculos.totalEntradasEtapa)}</p>
                   </div>
 
@@ -604,6 +618,9 @@ export default function TelaPix() {
                     <p className="font-semibold text-slate-100">Conferência</p>
                     <p>Saldo após entradas e saídas: {formatCurrency(calculos.saldoContaEtapa)}</p>
                     <p>Reserva esperada (Final + Caixinha): {formatCurrency(calculos.reservaEsperadaAcumulados)}</p>
+                    <p className={`font-semibold ${contaEtapaFechou ? 'text-emerald-300' : 'text-rose-300'}`}>
+                      Status: {contaEtapaFechou ? 'FECHOU' : 'NÃO FECHOU'}
+                    </p>
                     <p
                       className={`font-semibold ${
                         Math.abs(calculos.diferencaConferencia) < 0.01 ? 'text-emerald-300' : 'text-amber-300'
