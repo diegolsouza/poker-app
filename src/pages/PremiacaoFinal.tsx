@@ -315,12 +315,14 @@ export default function PremiacaoFinal() {
       });
 
     const totalSaidasCaixinha = saidasCaixinha.reduce((sum, item) => sum + item.valor, 0);
+    const saldoCaixinha = totalCaixinha - totalSaidasCaixinha;
 
     return {
       totalInscricoes,
       totalPremiacaoFinal,
       totalCaixinha,
       totalSaidasCaixinha,
+      saldoCaixinha,
       projecaoPagamentos,
       resumoPorEtapa,
       saidasCaixinha,
@@ -371,8 +373,8 @@ export default function PremiacaoFinal() {
 
         <article className="rounded-2xl border border-[#2d4659] bg-[#0b1a25] p-5 shadow-[0_12px_28px_rgba(2,6,23,0.3)]">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-300">Caixinha do Grupo</p>
-          <p className="mt-2 text-3xl font-bold text-slate-100">{formatCurrency(resumo.totalCaixinha)}</p>
-          <p className="mt-2 text-sm text-slate-300">Arrecadado com R$ 2 por inscrição de jogador.</p>
+          <p className="mt-2 text-3xl font-bold text-slate-100">{formatCurrency(resumo.saldoCaixinha)}</p>
+          <p className="mt-2 text-sm text-slate-300">Saldo líquido: arrecadação - saídas de Outros Custos (pode ficar negativo).</p>
         </article>
 
         <article className="rounded-2xl border border-[#2d4659] bg-[#0b1a25] p-5 shadow-[0_12px_28px_rgba(2,6,23,0.3)]">

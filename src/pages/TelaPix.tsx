@@ -425,10 +425,16 @@ export default function TelaPix() {
 
   const totaisResumoConta = useMemo(() => {
     if (!participanteSelecionado) {
-      return { totalGanhos: 0, totalCustos: 0, saldoEtapa: 0, totalExtrasCaixinha: 0 };
+      return {
+        totalGanhos: 0,
+        totalCustos: 0,
+        saldoEtapa: 0,
+        totalExtrasCaixinha: 0,
+        resultadoFinalParticipante: 0,
+      };
     }
 
-    const totalGanhos =
+    const totalGanhosEtapa =
       participanteSelecionado.premioColocacao +
       participanteSelecionado.reembolsoSalao +
       participanteSelecionado.reembolsoJanta;
@@ -440,10 +446,18 @@ export default function TelaPix() {
       participanteSelecionado.cotaSalao +
       participanteSelecionado.cotaJanta;
 
-    const saldoEtapa = totalGanhos - totalCustos;
+    const saldoEtapa = totalGanhosEtapa - totalCustos;
     const totalExtrasCaixinha = participanteSelecionado.outrosReembolsos;
+    const totalGanhos = totalGanhosEtapa + totalExtrasCaixinha;
+    const resultadoFinalParticipante = saldoEtapa + totalExtrasCaixinha;
 
-    return { totalGanhos, totalCustos, saldoEtapa, totalExtrasCaixinha };
+    return {
+      totalGanhos,
+      totalCustos,
+      saldoEtapa,
+      totalExtrasCaixinha,
+      resultadoFinalParticipante,
+    };
   }, [participanteSelecionado]);
 
   const contaEtapaFechou = useMemo(() => Math.abs(calculos.diferencaConferencia) <= 0.01, [calculos.diferencaConferencia]);
@@ -569,6 +583,7 @@ export default function TelaPix() {
                     <p className="font-semibold text-slate-100">Conferência</p>
                     <p>Saldo após entradas e saídas: {formatCurrency(calculos.saldoContaEtapa)}</p>
                     <p>Reserva esperada (Final + Caixinha): {formatCurrency(calculos.reservaEsperadaAcumulados)}</p>
+                    <p>Saídas da caixinha (fora da etapa): {formatCurrency(calculos.totalOutrosCustos)}</p>
                     <p className={`font-semibold ${contaEtapaFechou ? 'text-emerald-300' : 'text-rose-300'}`}>
                       Status: {contaEtapaFechou ? 'FECHOU' : 'NÃO FECHOU'}
                     </p>
@@ -678,6 +693,7 @@ export default function TelaPix() {
                     <p className="font-semibold text-slate-100">Conferência</p>
                     <p>Saldo após entradas e saídas: {formatCurrency(calculos.saldoContaEtapa)}</p>
                     <p>Reserva esperada (Final + Caixinha): {formatCurrency(calculos.reservaEsperadaAcumulados)}</p>
+                    <p>Saídas da caixinha (fora da etapa): {formatCurrency(calculos.totalOutrosCustos)}</p>
                     <p className={`font-semibold ${contaEtapaFechou ? 'text-emerald-300' : 'text-rose-300'}`}>
                       Status: {contaEtapaFechou ? 'FECHOU' : 'NÃO FECHOU'}
                     </p>
@@ -857,7 +873,7 @@ export default function TelaPix() {
                   <p className="mt-1 text-sm font-semibold text-emerald-300">+{formatCurrency(totaisResumoConta.totalGanhos)}</p>
                 </div>
                 <div className="rounded-lg border border-[#2f5268] bg-[#102536] px-3 py-2">
-                  <p className="text-[11px] uppercase tracking-wide text-slate-400">Saldo</p>
+                  <p className="text-[11px] uppercase tracking-wide text-slate-400">Saldo da etapa</p>
                   <p
                     className={`mt-1 text-sm font-semibold ${
                       totaisResumoConta.saldoEtapa > 0
@@ -911,6 +927,25 @@ export default function TelaPix() {
                   {formatCurrency(totaisResumoConta.saldoEtapa)}
                 </span>
               </div>
+
+              <div className="mt-2 flex items-center justify-between rounded-lg border border-[#2f5268] bg-[#102536] px-3 py-2">
+                <span className="text-sm text-slate-300">Resultado final do participante</span>
+                <span
+                  className={`text-base font-semibold ${
+                    totaisResumoConta.resultadoFinalParticipante > 0
+                      ? 'text-emerald-300'
+                      : totaisResumoConta.resultadoFinalParticipante < 0
+                        ? 'text-rose-300'
+                        : 'text-slate-200'
+                  }`}
+                >
+                  {formatCurrency(totaisResumoConta.resultadoFinalParticipante)}
+                </span>
+              </div>
+
+              <p className="mt-2 text-[11px] text-slate-400">
+                O valor de Custos Extras entra no resultado final do participante, mas é retirado da Caixinha e não entra no cálculo da etapa.
+              </p>
             </footer>
           </article>
         </div>
