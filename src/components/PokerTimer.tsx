@@ -119,15 +119,15 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked }: Poke
     void loadTimerState();
   }, [etapaId]);
 
-  // Sincronizar estado a cada 2 segundos
+  // Sincronizar estado a cada 1 segundo para tempo real
   useEffect(() => {
     syncIntervalRef.current = setInterval(() => {
       const now = Date.now();
-      if (now - lastSyncRef.current > 2000) {
+      if (now - lastSyncRef.current > 1000) {
         lastSyncRef.current = now;
         void loadTimerState();
       }
-    }, 2000);
+    }, 1000);
 
     return () => {
       if (syncIntervalRef.current) clearInterval(syncIntervalRef.current);
@@ -288,6 +288,7 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked }: Poke
         status: 'running',
         startedAt: Date.now(),
         pausedAt: null,
+        pausedElapsedSeconds: 0,
       };
 
       await saveTimerState(newState);
@@ -348,6 +349,57 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked }: Poke
         lastBlindStartedAt: null,
       };
 
+      await saveTimerState(newState);
+    }
+  };
+
+  const handleAddSeconds = async (seconds: number) => {
+    if (!canControl) return;
+
+    let newElapsed = getElapsedSeconds() + seconds;
+    if (newElapsed < 0) newElapsed = 0;
+
+    const levelDurationSeconds = currentBlind.minutes * 60;
+    if (timerState.lastBlindMode) {
+      if (newElapsed > LAST_BLIND_DURATION_SECONDS) {
+        newElapsed = LAST_BLIND_DURATION_SECONDS;
+      }
+    } else {
+      if (newElapsed > levelDurationSeconds) {
+        newElapsed = 0;
+        let nextBlindLevel = timerState.blindLevel + 1;
+        if (nextBlindLevel >= BLIND_LEVELS.length) {
+          nextBlindLevel = BLIND_LEVELS.length - 1;
+        }
+
+        const newState: TimerState = {
+          status: 'running',
+          blindLevel: nextBlindLevel,
+          startedAt: Date.now(),
+          pausedAt: null,
+          pausedElapsedSeconds: 0,
+          intervalStartedAt: null,
+          intervalExtraMinutes: 0,
+          lastBlindMode: nextBlindLevel >= BLIND_LEVELS.length - 1,
+          lastBlindStartedAt: nextBlindLevel >= BLIND_LEVELS.length - 1 ? Date.now() : null,
+        };
+        await saveTimerState(newState);
+        return;
+      }
+    }
+
+    if (timerState.status === 'running') {
+      const newState: TimerState = {
+        ...timerState,
+        startedAt: Date.now() - newElapsed * 1000,
+        pausedElapsedSeconds: 0,
+      };
+      await saveTimerState(newState);
+    } else if (timerState.status === 'paused') {
+      const newState: TimerState = {
+        ...timerState,
+        pausedElapsedSeconds: newElapsed,
+      };
       await saveTimerState(newState);
     }
   };
@@ -559,6 +611,23 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked }: Poke
               ⏭️ Próximo Blind
             </button>
           )}
+
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => void handleAddSeconds(30)}
+              className="rounded-lg px-4 py-2 text-sm font-semibold bg-violet-600 text-violet-50 hover:bg-violet-500 transition"
+            >
+              ⏱️ +30s
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleAddSeconds(-30)}
+              className="rounded-lg px-4 py-2 text-sm font-semibold bg-violet-600 text-violet-50 hover:bg-violet-500 transition"
+            >
+              ⏱️ -30s
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -601,7 +670,8 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked }: Poke
               : isLastMinute
                 ? 'bg-yellow-500/30 border-4 border-yellow-500/50'
                 : 'bg-[#1b3e52]/70 border-4 border-[#2d4659]',
-          ].join(' ')}>\n            <p className="text-9xl tabular-nums text-slate-100">{timerDisplayMaximized}</p>
+          ].join(' ')}>
+            <p className="text-9xl tabular-nums text-slate-100">{timerDisplayMaximized}</p>
           </div>
 
           {/* Controles em modo maximizado */}
@@ -663,6 +733,22 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked }: Poke
                 ].join(' ')}
               >
                 🔄 Reset
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-4 w-full max-w-5xl">
+              <button
+                type="button"
+                onClick={() => void handleAddSeconds(30)}
+                className="rounded-xl px-6 py-4 text-lg font-semibold bg-violet-600 text-violet-50 hover:bg-violet-500 transition"
+              >
+                ⏱️ +30s
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleAddSeconds(-30)}
+                className="rounded-xl px-6 py-4 text-lg font-semibold bg-violet-600 text-violet-50 hover:bg-violet-500 transition"
+              >
+                ⏱️ -30s
               </button>
             </div>
           )}
