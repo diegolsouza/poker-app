@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS configuracoes (
     custo_salao NUMERIC(10, 2) NOT NULL DEFAULT 0.00,
     pontuacao_json JSONB DEFAULT '{}' NOT NULL,
     premiacao_json JSONB DEFAULT '{}' NOT NULL,
+    timer_config_json JSONB DEFAULT '{"blindLevels":[],"intervalMinutes":20,"intervalExtraMinutes":10}' NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

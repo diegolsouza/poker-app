@@ -22,6 +22,18 @@ type ConfiguracaoRow = {
   custo_salao: number;
   pontuacao_json: unknown;
   premiacao_json: unknown;
+  timer_config_json?: unknown;
+};
+
+type BlindLevelConfig = {
+  bigBlind: number;
+  minutes: number;
+};
+
+type TimerConfig = {
+  blindLevels: BlindLevelConfig[];
+  intervalMinutes: number;
+  intervalExtraMinutes: number;
 };
 
 function parseMoney(value: string): number {
@@ -64,6 +76,29 @@ export default function Configuracoes() {
   const [premiacaoDe9A18, setPremiacaoDe9A18] = useState<string[]>(prizeToInputState(DEFAULT_PRIZE_RULES.de9a18));
   const [premiacaoAcima18, setPremiacaoAcima18] = useState<string[]>(prizeToInputState(DEFAULT_PRIZE_RULES.acima18));
 
+  // Timer Configuration States
+  const DEFAULT_BLIND_LEVELS: BlindLevelConfig[] = [
+    { bigBlind: 100, minutes: 20 },
+    { bigBlind: 200, minutes: 20 },
+    { bigBlind: 300, minutes: 20 },
+    { bigBlind: 400, minutes: 20 },
+    { bigBlind: 600, minutes: 20 },
+    { bigBlind: 800, minutes: 20 },
+    { bigBlind: 1200, minutes: 20 },
+    { bigBlind: 2000, minutes: 20 },
+    { bigBlind: 3000, minutes: 30 },
+    { bigBlind: 4000, minutes: 30 },
+  ];
+
+  const [blindLevels, setBlindLevels] = useState<string[]>(
+    DEFAULT_BLIND_LEVELS.map(bl => `${bl.bigBlind}`),
+  );
+  const [levelDurations, setLevelDurations] = useState<string[]>(
+    DEFAULT_BLIND_LEVELS.map(bl => `${bl.minutes}`),
+  );
+  const [intervalMinutes, setIntervalMinutes] = useState('20');
+  const [intervalExtraMinutes, setIntervalExtraMinutes] = useState('10');
+
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -76,7 +111,7 @@ export default function Configuracoes() {
 
       const { data, error: queryError } = await supabase
         .from('configuracoes')
-        .select('id, buy_in, rebuy, add_on, custo_salao, pontuacao_json, premiacao_json')
+        .select('id, buy_in, rebuy, add_on, custo_salao, pontuacao_json, premiacao_json, timer_config_json')
         .eq('id', 1)
         .maybeSingle();
 
@@ -102,6 +137,17 @@ export default function Configuracoes() {
         setPremiacaoAte9(prizeToInputState(prizeRules.ate9));
         setPremiacaoDe9A18(prizeToInputState(prizeRules.de9a18));
         setPremiacaoAcima18(prizeToInputState(prizeRules.acima18));
+
+        // Load timer config
+        if (config.timer_config_json) {
+          const timerConfig = config.timer_config_json as TimerConfig;
+          if (timerConfig.blindLevels && Array.isArray(timerConfig.blindLevels)) {
+            setBlindLevels(timerConfig.blindLevels.map(bl => String(bl.bigBlind)));
+            setLevelDurations(timerConfig.blindLevels.map(bl => String(bl.minutes)));
+          }
+          setIntervalMinutes(String(timerConfig.intervalMinutes || 20));
+          setIntervalExtraMinutes(String(timerConfig.intervalExtraMinutes || 10));
+        }
       }
 
       setIsLoading(false);
@@ -135,6 +181,14 @@ export default function Configuracoes() {
         de9a18: premiacaoDe9A18.map(parseMoney),
         acima18: premiacaoAcima18.map(parseMoney),
       } as PrizeRules),
+      timer_config_json: {
+        blindLevels: blindLevels.map((bb, idx) => ({
+          bigBlind: Number.parseInt(bb, 10),
+          minutes: Number.parseInt(levelDurations[idx] || '20', 10),
+        })),
+        intervalMinutes: Number.parseInt(intervalMinutes, 10),
+        intervalExtraMinutes: Number.parseInt(intervalExtraMinutes, 10),
+      } as TimerConfig,
     };
 
     const { error: upsertError } = await supabase
@@ -159,6 +213,11 @@ export default function Configuracoes() {
     value: string,
   ) => {
     setter((prev) => prev.map((item, idx) => (idx === index ? value : item)));
+  };
+
+  const handleUpdateBlindLevel = (index: number, bigBlind: string, duration: string) => {
+    setBlindLevels((prev) => prev.map((item, idx) => (idx === index ? bigBlind : item)));
+    setLevelDurations((prev) => prev.map((item, idx) => (idx === index ? duration : item)));
   };
 
   const renderPremiacaoGrid = (
@@ -333,6 +392,76 @@ export default function Configuracoes() {
             {renderPremiacaoGrid('Até 9 jogadores (1 mesa)', premiacaoAte9, setPremiacaoAte9)}
             {renderPremiacaoGrid('De 9 a 18 jogadores (2 mesas)', premiacaoDe9A18, setPremiacaoDe9A18)}
             {renderPremiacaoGrid('Acima de 18 jogadores (3 mesas)', premiacaoAcima18, setPremiacaoAcima18)}
+          </section>
+
+          {/* Configuração do Timer */}
+          <section className="rounded-xl border border-[#244357] bg-[#0b1a25] p-4">
+            <h2 className="text-sm font-semibold text-slate-100">Configuração do Timer de Poker</h2>
+            <p className="mt-1 text-xs text-slate-400">Configure os níveis de blind, duração de cada nível, intervalo e extras.</p>
+            
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-[#244357]">
+                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-300">Nível</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-300">Big Blind</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-300">Duração (min)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {blindLevels.map((bigBlind, index) => (
+                    <tr key={index} className="border-b border-[#244357]/30">
+                      <td className="px-3 py-2 text-slate-300">Nível {index + 1}</td>
+                      <td className="px-3 py-2">
+                        <input
+                          type="number"
+                          min={1}
+                          value={blindLevels[index]}
+                          onChange={(event) => handleUpdateBlindLevel(index, event.target.value, levelDurations[index])}
+                          disabled={isDisabled}
+                          className="h-8 w-24 rounded-lg border border-[#244357] bg-[#081723] px-2 text-slate-50 outline-none transition focus:border-[#ff5e00]"
+                        />
+                      </td>
+                      <td className="px-3 py-2">
+                        <input
+                          type="number"
+                          min={1}
+                          value={levelDurations[index]}
+                          onChange={(event) => handleUpdateBlindLevel(index, blindLevels[index], event.target.value)}
+                          disabled={isDisabled}
+                          className="h-8 w-24 rounded-lg border border-[#244357] bg-[#081723] px-2 text-slate-50 outline-none transition focus:border-[#ff5e00]"
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <label className="text-xs font-medium text-slate-300">
+                Intervalo Base (minutos)
+                <input
+                  type="number"
+                  min={1}
+                  value={intervalMinutes}
+                  onChange={(event) => setIntervalMinutes(event.target.value)}
+                  disabled={isDisabled}
+                  className="mt-1 h-10 w-full rounded-lg border border-[#244357] bg-[#081723] px-3 text-slate-50 outline-none transition focus:border-[#ff5e00]"
+                />
+              </label>
+              <label className="text-xs font-medium text-slate-300">
+                Tempo de Extras Aceitáveis (minutos)
+                <input
+                  type="number"
+                  min={0}
+                  value={intervalExtraMinutes}
+                  onChange={(event) => setIntervalExtraMinutes(event.target.value)}
+                  disabled={isDisabled}
+                  className="mt-1 h-10 w-full rounded-lg border border-[#244357] bg-[#081723] px-3 text-slate-50 outline-none transition focus:border-[#ff5e00]"
+                />
+              </label>
+            </div>
           </section>
 
           {error ? <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">{error}</p> : null}

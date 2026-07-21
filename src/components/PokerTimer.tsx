@@ -4,6 +4,17 @@ import supabase from '../supabaseClient';
 // ===================== TIPOS =====================
 type TimerStatus = 'stopped' | 'running' | 'paused' | 'interval';
 
+type BlindLevelConfig = {
+  bigBlind: number;
+  minutes: number;
+};
+
+type TimerConfig = {
+  blindLevels: BlindLevelConfig[];
+  intervalMinutes: number;
+  intervalExtraMinutes: number;
+};
+
 type BlindLevel = {
   smallBlind: number;
   bigBlind: number;
@@ -24,20 +35,25 @@ type TimerState = {
 };
 
 // ===================== CONSTANTES =====================
-const BLIND_LEVELS: BlindLevel[] = [
-  { smallBlind: 50, bigBlind: 100, minutes: 20, showAnte: false },
-  { smallBlind: 100, bigBlind: 200, minutes: 20, showAnte: false },
-  { smallBlind: 150, bigBlind: 300, minutes: 20, showAnte: false },
-  { smallBlind: 200, bigBlind: 400, minutes: 20, showAnte: false },
-  { smallBlind: 300, bigBlind: 600, minutes: 20, showAnte: true }, // ANTE EM JOGO
-  { smallBlind: 400, bigBlind: 800, minutes: 20, showAnte: true },
-  { smallBlind: 600, bigBlind: 1200, minutes: 20, showAnte: true },
-  { smallBlind: 1000, bigBlind: 2000, minutes: 20, showAnte: true },
-  { smallBlind: 1500, bigBlind: 3000, minutes: 30, showAnte: true },
-  { smallBlind: 2000, bigBlind: 4000, minutes: 30, showAnte: true },
+const DEFAULT_BLIND_LEVELS: BlindLevelConfig[] = [
+  { bigBlind: 100, minutes: 20 },
+  { bigBlind: 200, minutes: 20 },
+  { bigBlind: 300, minutes: 20 },
+  { bigBlind: 400, minutes: 20 },
+  { bigBlind: 600, minutes: 20 },
+  { bigBlind: 800, minutes: 20 },
+  { bigBlind: 1200, minutes: 20 },
+  { bigBlind: 2000, minutes: 20 },
+  { bigBlind: 3000, minutes: 30 },
+  { bigBlind: 4000, minutes: 30 },
 ];
 
-const INTERVAL_BASE_MINUTES = 20;
+const DEFAULT_TIMER_CONFIG: TimerConfig = {
+  blindLevels: DEFAULT_BLIND_LEVELS,
+  intervalMinutes: 20,
+  intervalExtraMinutes: 10,
+};
+
 const LAST_BLIND_DURATION_SECONDS = 15 * 60; // 15 minutos
 
 // ===================== UTILITÁRIOS =====================
@@ -76,14 +92,50 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
   const [isMaximized, setIsMaximized] = useState(forcedPanelMode);
   const [currentTime, setCurrentTime] = useState<number>(Date.now());
   const [error, setError] = useState<string | null>(null);
+  const [timerConfig, setTimerConfig] = useState<TimerConfig>(DEFAULT_TIMER_CONFIG);
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const syncIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastSyncRef = useRef<number>(0);
+
+  // Gerar blind levels dinamicamente baseado na configuração carregada
+  const blindLevels: BlindLevel[] = useMemo(() => {
+    return timerConfig.blindLevels.map((config, index) => ({
+      smallBlind: Math.floor(config.bigBlind / 2),
+      bigBlind: config.bigBlind,
+      minutes: config.minutes,
+      showAnte: index >= 4, // ANTE em jogo a partir do nível 5 (índice 4)
+    }));
+  }, [timerConfig]);
 
   const canControl = isAdmin || isMesarioUnlocked;
 
   // Ocultar timer nas páginas públicas até que seja iniciado (a menos que esteja em modo painel forçado)
   const showTimer = forcedPanelMode || timerState.status !== 'stopped' || isAdmin || isMesarioUnlocked;
+
+  // ============ CARREGAR CONFIGURAÇÃO DO TIMER ============
+  const loadTimerConfig = async () => {
+    try {
+      const { data, error: loadError } = await supabase
+        .from('configuracoes')
+        .select('timer_config_json')
+        .eq('id', 1)
+        .maybeSingle();
+
+      if (loadError) {
+        console.error('Erro ao carregar config do timer:', loadError.message);
+        return;
+      }
+
+      if (data && data.timer_config_json) {
+        const config = data.timer_config_json as TimerConfig;
+        if (config.blindLevels && Array.isArray(config.blindLevels) && config.blindLevels.length > 0) {
+          setTimerConfig(config);
+        }
+      }
+    } catch (err) {
+      console.error('Erro ao processar config do timer:', err);
+    }
+  };
 
   // ============ CARREGAMENTO INICIAL E SINCRONIZAÇÃO ============
   const loadTimerState = async () => {
@@ -122,6 +174,11 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
   useEffect(() => {
     void loadTimerState();
   }, [etapaId]);
+
+  // Carregar configuração do timer uma vez ao inicializar
+  useEffect(() => {
+    void loadTimerConfig();
+  }, []);
 
   // Sincronizar estado a cada 1 segundo para tempo real
   useEffect(() => {
@@ -239,13 +296,13 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
     return 0;
   };
 
-  const currentBlind = useMemo(() => BLIND_LEVELS[timerState.blindLevel] || BLIND_LEVELS[0], [timerState.blindLevel]);
+  const currentBlind = useMemo(() => blindLevels[timerState.blindLevel] || blindLevels[0], [timerState.blindLevel, blindLevels]);
 
   const { remainingSeconds, isLastMinute } = useMemo(() => {
     const elapsed = getElapsedSeconds();
 
     if (timerState.status === 'interval') {
-      const totalIntervalSeconds = (INTERVAL_BASE_MINUTES + timerState.intervalExtraMinutes) * 60;
+      const totalIntervalSeconds = (timerConfig.intervalMinutes + timerState.intervalExtraMinutes) * 60;
       const remaining = Math.max(0, totalIntervalSeconds - elapsed);
       return { remainingSeconds: remaining, isLastMinute: remaining < 60 };
     }
@@ -258,7 +315,7 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
     const levelDurationSeconds = currentBlind.minutes * 60;
     const remaining = Math.max(0, levelDurationSeconds - elapsed);
     return { remainingSeconds: remaining, isLastMinute: remaining < 60 };
-  }, [timerState, currentBlind, getElapsedSeconds]);
+  }, [timerState, currentBlind, getElapsedSeconds, timerConfig]);
 
   // ============ CONTROLES ============
   const handleStart = async () => {
@@ -323,14 +380,14 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
 
     // Calcular os acréscimos
     const intervalElapsed = Math.floor((currentTime - (timerState.intervalStartedAt || Date.now())) / 1000);
-    const extraMinutes = Math.max(0, Math.ceil((intervalElapsed - INTERVAL_BASE_MINUTES * 60) / 60));
+    const extraMinutes = Math.max(0, Math.ceil((intervalElapsed - timerConfig.intervalMinutes * 60) / 60));
 
     // Avançar para o próximo blind se houver, senão voltar ao running
     let nextBlindLevel = timerState.blindLevel + 1;
 
-    if (nextBlindLevel >= BLIND_LEVELS.length) {
+    if (nextBlindLevel >= blindLevels.length) {
       // Entrar no modo de últimas 3 mãos
-      nextBlindLevel = BLIND_LEVELS.length - 1;
+      nextBlindLevel = blindLevels.length - 1;
 
       const newState: TimerState = {
         status: 'running',
@@ -377,8 +434,8 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
       if (newElapsed > levelDurationSeconds) {
         newElapsed = 0;
         let nextBlindLevel = timerState.blindLevel + 1;
-        if (nextBlindLevel >= BLIND_LEVELS.length) {
-          nextBlindLevel = BLIND_LEVELS.length - 1;
+        if (nextBlindLevel >= blindLevels.length) {
+          nextBlindLevel = blindLevels.length - 1;
         }
 
         const newState: TimerState = {
@@ -389,8 +446,8 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
           pausedElapsedSeconds: 0,
           intervalStartedAt: null,
           intervalExtraMinutes: 0,
-          lastBlindMode: nextBlindLevel >= BLIND_LEVELS.length - 1,
-          lastBlindStartedAt: nextBlindLevel >= BLIND_LEVELS.length - 1 ? Date.now() : null,
+          lastBlindMode: nextBlindLevel >= blindLevels.length - 1,
+          lastBlindStartedAt: nextBlindLevel >= blindLevels.length - 1 ? Date.now() : null,
         };
         await saveTimerState(newState);
         return;
@@ -418,8 +475,8 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
 
     let nextBlindLevel = timerState.blindLevel + 1;
 
-    if (nextBlindLevel >= BLIND_LEVELS.length) {
-      nextBlindLevel = BLIND_LEVELS.length - 1;
+    if (nextBlindLevel >= blindLevels.length) {
+      nextBlindLevel = blindLevels.length - 1;
     }
 
     const newState: TimerState = {
@@ -616,7 +673,7 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
             </button>
           )}
 
-          {!timerState.lastBlindMode && timerState.blindLevel < BLIND_LEVELS.length - 1 && timerState.status === 'running' && (
+          {!timerState.lastBlindMode && timerState.blindLevel < blindLevels.length - 1 && timerState.status === 'running' && (
             <button
               type="button"
               onClick={handleNextBlind}
@@ -650,7 +707,7 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
   // ============ MODO MAXIMIZADO ============
   if (isMaximized) {
     const timerDisplayMaximized = formatTime(remainingSeconds);
-    const currentBlindMaximized = BLIND_LEVELS[timerState.blindLevel] || BLIND_LEVELS[0];
+    const currentBlindMaximized = blindLevels[timerState.blindLevel] || blindLevels[0];
     
     return (
       <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-8 bg-black p-8">
