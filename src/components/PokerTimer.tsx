@@ -676,7 +676,8 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked }: Poke
 
           {/* Controles em modo maximizado */}
           {canControl && (
-            <div className="grid grid-cols-4 gap-4 w-full max-w-5xl">
+            <>
+              <div className="grid grid-cols-4 gap-4 w-full max-w-5xl">
               <button
                 type="button"
                 onClick={handleStart}
@@ -751,6 +752,7 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked }: Poke
                 ⏱️ -30s
               </button>
             </div>
+            </>
           )}
         </div>
       </div>
