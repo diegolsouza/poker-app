@@ -409,7 +409,7 @@ export default function Configuracoes() {
                   </tr>
                 </thead>
                 <tbody>
-                  {blindLevels.map((bigBlind, index) => (
+                  {blindLevels.map((_bigBlind, index) => (
                     <tr key={index} className="border-b border-[#244357]/30">
                       <td className="px-3 py-2 text-slate-300">Nível {index + 1}</td>
                       <td className="px-3 py-2">
