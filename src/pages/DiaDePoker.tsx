@@ -1590,7 +1590,7 @@ export default function DiaDePoker() {
       {canViewAdminTab && tab === 'admin' ? renderAdminTab() : null}
       
       {/* Mostrar timer de poker para todas as mesas */}
-      {!canViewAdminTab && activeMesa && selectedEtapaId ? (
+      {activeMesa && selectedEtapaId ? (
         <PokerTimer
           etapaId={Number(selectedEtapaId)}
           isAdmin={canViewAdminTab}
