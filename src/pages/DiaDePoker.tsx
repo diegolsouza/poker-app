@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import supabase from '../supabaseClient';
 import { isAdminAuthenticated } from '../utils/adminAuth';
+import PokerTimer from '../components/PokerTimer';
 
 type EtapaStatus = 'pendente' | 'em_andamento' | 'finalizada';
 type TabKey = 'admin' | 'mesa1' | 'mesa2' | 'mesa3' | 'mesaFinal';
@@ -1587,6 +1588,16 @@ export default function DiaDePoker() {
       </div>
 
       {canViewAdminTab && tab === 'admin' ? renderAdminTab() : null}
+      
+      {/* Mostrar timer de poker para todas as mesas */}
+      {!canViewAdminTab && activeMesa && selectedEtapaId ? (
+        <PokerTimer
+          etapaId={Number(selectedEtapaId)}
+          isAdmin={canViewAdminTab}
+          isMesarioUnlocked={mesaUnlocked[activeMesa]}
+        />
+      ) : null}
+
       {activeMesa === 1 ? renderMesaTab(1) : null}
       {activeMesa === 2 ? renderMesaTab(2) : null}
       {activeMesa === 3 ? renderMesaTab(3) : null}

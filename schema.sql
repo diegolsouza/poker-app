@@ -89,6 +89,23 @@ CREATE TABLE IF NOT EXISTS etapa_mesa_pins (
     CONSTRAINT uk_etapa_mesa_pin UNIQUE(etapa_id, numero_mesa)
 );
 
+-- Tabela de Timer de Poker por Etapa
+CREATE TABLE IF NOT EXISTS poker_timer_etapa (
+    id SERIAL PRIMARY KEY,
+    etapa_id INTEGER NOT NULL UNIQUE REFERENCES etapas(id) ON DELETE CASCADE,
+    status VARCHAR(20) NOT NULL DEFAULT 'stopped' CHECK (status IN ('stopped', 'running', 'paused', 'interval')),
+    blind_level INTEGER NOT NULL DEFAULT 0,
+    started_at TIMESTAMP,
+    paused_at TIMESTAMP,
+    paused_elapsed_seconds INTEGER DEFAULT 0,
+    interval_started_at TIMESTAMP,
+    interval_extra_minutes INTEGER DEFAULT 0,
+    last_blind_mode BOOLEAN DEFAULT FALSE,
+    last_blind_started_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- =====================================================
 -- ÍNDICES PARA OTIMIZAÇÃO
 -- =====================================================
@@ -101,6 +118,7 @@ CREATE INDEX idx_registros_colocacao ON registros_etapa(colocacao);
 CREATE INDEX idx_jogadores_ativo ON jogadores(ativo);
 CREATE INDEX idx_pre_jogo_updated_at ON pre_jogo_etapa(updated_at);
 CREATE INDEX idx_etapa_mesa_pins_etapa_id ON etapa_mesa_pins(etapa_id);
+CREATE INDEX idx_poker_timer_etapa_id ON poker_timer_etapa(etapa_id);
 
 -- =====================================================
 -- FUNÇÕES AUXILIARES PARA AUDITORIA
@@ -133,6 +151,11 @@ CREATE TRIGGER trigger_pre_jogo_updated_at
 
 CREATE TRIGGER trigger_etapa_mesa_pins_updated_at
     BEFORE UPDATE ON etapa_mesa_pins
+    FOR EACH ROW
+    EXECUTE FUNCTION atualizar_updated_at();
+
+CREATE TRIGGER trigger_poker_timer_etapa_updated_at
+    BEFORE UPDATE ON poker_timer_etapa
     FOR EACH ROW
     EXECUTE FUNCTION atualizar_updated_at();
 
