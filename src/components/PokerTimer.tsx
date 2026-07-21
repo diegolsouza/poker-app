@@ -593,12 +593,12 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
       <div className="flex items-center justify-between rounded-lg bg-[#1b3e52]/50 p-6">
         <div className="text-center">
           <p className="text-base text-slate-300 font-semibold">Small Blind</p>
-          <p className="text-6xl font-bold text-emerald-400">{currentBlind.smallBlind}</p>
+          <p className="text-3xl sm:text-6xl font-bold text-emerald-400">{currentBlind.smallBlind}</p>
         </div>
         <div className="h-16 border-l-2 border-[#2d4659]" />
         <div className="text-center">
           <p className="text-base text-slate-300 font-semibold">Big Blind</p>
-          <p className="text-6xl font-bold text-emerald-400">{currentBlind.bigBlind}</p>
+          <p className="text-3xl sm:text-6xl font-bold text-emerald-400">{currentBlind.bigBlind}</p>
         </div>
       </div>
 
@@ -748,13 +748,13 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
         <div className={['w-full h-full flex flex-col items-center justify-center gap-12', isFlashing ? 'animate-blind-flash' : ''].join(' ')}>
           {/* Aviso ANTE EM JOGO */}
           {currentBlindMaximized.showAnte && (
-            <div className="animate-pulse rounded-3xl bg-gradient-to-r from-red-600 via-yellow-600 to-red-600 p-8 w-full max-w-5xl border-4 border-red-400 shadow-[0_0_50px_rgba(220,38,38,0.6)]">
+            <div className="animate-pulse rounded-3xl bg-gradient-to-r from-red-600 via-yellow-600 to-red-600 p-8 w-full max-w-[85rem] border-4 border-red-400 shadow-[0_0_50px_rgba(220,38,38,0.6)]">
               <p className="text-8xl font-black text-white drop-shadow-lg">⚠️ ANTE EM JOGO! ⚠️</p>
             </div>
           )}
 
           {/* Blinds Gigante */}
-          <div className="flex items-center justify-between gap-16 rounded-2xl bg-[#1b3e52]/70 p-12 w-full max-w-5xl">
+          <div className="flex items-center justify-between gap-16 rounded-2xl bg-[#1b3e52]/70 p-12 w-full max-w-[85rem]">
             <div className="text-center flex-1">
               <p className="text-4xl text-slate-300 font-semibold mb-4">Small Blind</p>
               <p className="text-[14rem] leading-none font-black text-emerald-400 drop-shadow-lg">{currentBlindMaximized.smallBlind}</p>
@@ -768,7 +768,7 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
 
           {/* Timer Gigante */}
           <div className={[
-            'rounded-3xl p-16 text-center font-mono font-bold w-full max-w-5xl',
+            'rounded-3xl p-16 text-center font-mono font-bold w-full max-w-[85rem]',
             timerState.status === 'interval'
               ? 'bg-red-500/30 border-4 border-red-500/50'
               : isLastMinute
@@ -781,7 +781,7 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
           {/* Controles em modo maximizado */}
           {canControl && (
             <>
-              <div className="grid grid-cols-4 gap-4 w-full max-w-5xl">
+              <div className="grid grid-cols-4 gap-4 w-full max-w-[85rem]">
               <button
                 type="button"
                 onClick={handleStart}
@@ -840,7 +840,7 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
                 🔄 Reset
               </button>
             </div>
-            <div className="grid grid-cols-2 gap-4 w-full max-w-5xl">
+            <div className="grid grid-cols-2 gap-4 w-full max-w-[85rem]">
               <button
                 type="button"
                 onClick={() => void handleAddSeconds(30)}
