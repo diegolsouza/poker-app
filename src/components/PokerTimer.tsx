@@ -98,6 +98,11 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const syncIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastSyncRef = useRef<number>(0);
+  const serverTimeOffsetRef = useRef<number>(0);
+  const autoAdvancedForLevelRef = useRef<number | null>(null);
+  const prevBlindLevelRef = useRef<number>(-1);
+  const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isFlashing, setIsFlashing] = useState(false);
 
   // Gerar blind levels dinamicamente baseado na configuração carregada
   const blindLevels: BlindLevel[] = useMemo(() => {
@@ -110,6 +115,7 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
   }, [timerConfig]);
 
   const canControl = isAdmin || isMesarioUnlocked;
+  const serverNow = () => Date.now() + serverTimeOffsetRef.current;
 
   // Ocultar timer nas páginas públicas até que seja iniciado (a menos que esteja em modo painel forçado)
   const showTimer = forcedPanelMode || timerState.status !== 'stopped' || isAdmin || isMesarioUnlocked;
@@ -182,6 +188,21 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
     void loadTimerConfig();
   }, []);
 
+  // Sincronizar horário com o servidor uma vez ao montar (corrige diferença de relógio entre dispositivos)
+  useEffect(() => {
+    const syncServerTime = async () => {
+      const localBefore = Date.now();
+      const { data } = await supabase.rpc('get_server_time');
+      const localAfter = Date.now();
+      if (data != null) {
+        const serverTimeMs = Number(data);
+        const networkLatency = (localAfter - localBefore) / 2;
+        serverTimeOffsetRef.current = serverTimeMs - localBefore - networkLatency;
+      }
+    };
+    void syncServerTime();
+  }, []);
+
   // Sincronizar estado a cada 1 segundo para tempo real
   useEffect(() => {
     syncIntervalRef.current = setInterval(() => {
@@ -205,7 +226,7 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
   // ============ TICK DO TIMER ============
   useEffect(() => {
     timerIntervalRef.current = setInterval(() => {
-      setCurrentTime(Date.now());
+      setCurrentTime(Date.now() + serverTimeOffsetRef.current);
     }, 100);
 
     return () => {
@@ -326,7 +347,7 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
     const newState: TimerState = {
       status: 'running',
       blindLevel: timerState.blindLevel,
-      startedAt: Date.now(),
+      startedAt: serverNow(),
       pausedAt: null,
       pausedElapsedSeconds: 0,
       intervalStartedAt: null,
@@ -345,7 +366,7 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
       const newState: TimerState = {
         ...timerState,
         status: 'paused',
-        pausedAt: Date.now(),
+        pausedAt: serverNow(),
         pausedElapsedSeconds: getElapsedSeconds(),
       };
 
@@ -354,7 +375,7 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
       const newState: TimerState = {
         ...timerState,
         status: 'running',
-        startedAt: Date.now(),
+        startedAt: serverNow(),
         pausedAt: null,
         // pausedElapsedSeconds mantido: será somado ao elapsed desde startedAt
       };
@@ -369,7 +390,7 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
     const newState: TimerState = {
       ...timerState,
       status: 'interval',
-      intervalStartedAt: Date.now(),
+      intervalStartedAt: serverNow(),
       intervalExtraMinutes: 0,
       pausedElapsedSeconds: getElapsedSeconds(),
     };
@@ -380,45 +401,18 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
   const handleEndInterval = async () => {
     if (!canControl) return;
 
-    // Calcular os acréscimos
-    const intervalElapsed = Math.floor((currentTime - (timerState.intervalStartedAt || Date.now())) / 1000);
-    const extraMinutes = Math.max(0, Math.ceil((intervalElapsed - timerConfig.intervalMinutes * 60) / 60));
+    // Retorna ao mesmo blind de onde parou antes do intervalo
+    const newState: TimerState = {
+      ...timerState,
+      status: 'running',
+      startedAt: serverNow(),
+      pausedAt: null,
+      // pausedElapsedSeconds: mantido do spread (salvo ao entrar no intervalo)
+      intervalStartedAt: null,
+      intervalExtraMinutes: 0,
+    };
 
-    // Avançar para o próximo blind se houver, senão voltar ao running
-    let nextBlindLevel = timerState.blindLevel + 1;
-
-    if (nextBlindLevel >= blindLevels.length) {
-      // Entrar no modo de últimas 3 mãos
-      nextBlindLevel = blindLevels.length - 1;
-
-      const newState: TimerState = {
-        status: 'running',
-        blindLevel: nextBlindLevel,
-        startedAt: Date.now(),
-        pausedAt: null,
-        pausedElapsedSeconds: 0,
-        intervalStartedAt: null,
-        intervalExtraMinutes: extraMinutes,
-        lastBlindMode: true,
-        lastBlindStartedAt: Date.now(),
-      };
-
-      await saveTimerState(newState);
-    } else {
-      const newState: TimerState = {
-        status: 'running',
-        blindLevel: nextBlindLevel,
-        startedAt: Date.now(),
-        pausedAt: null,
-        pausedElapsedSeconds: 0,
-        intervalStartedAt: null,
-        intervalExtraMinutes: extraMinutes,
-        lastBlindMode: false,
-        lastBlindStartedAt: null,
-      };
-
-      await saveTimerState(newState);
-    }
+    await saveTimerState(newState);
   };
 
   const handleAddSeconds = async (seconds: number) => {
@@ -443,13 +437,13 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
         const newState: TimerState = {
           status: 'running',
           blindLevel: nextBlindLevel,
-          startedAt: Date.now(),
+          startedAt: serverNow(),
           pausedAt: null,
           pausedElapsedSeconds: 0,
           intervalStartedAt: null,
           intervalExtraMinutes: 0,
           lastBlindMode: nextBlindLevel >= blindLevels.length - 1,
-          lastBlindStartedAt: nextBlindLevel >= blindLevels.length - 1 ? Date.now() : null,
+          lastBlindStartedAt: nextBlindLevel >= blindLevels.length - 1 ? serverNow() : null,
         };
         await saveTimerState(newState);
         return;
@@ -459,7 +453,7 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
     if (timerState.status === 'running') {
       const newState: TimerState = {
         ...timerState,
-        startedAt: Date.now() - newElapsed * 1000,
+        startedAt: serverNow() - newElapsed * 1000,
         pausedElapsedSeconds: 0,
       };
       await saveTimerState(newState);
@@ -484,7 +478,7 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
     const newState: TimerState = {
       ...timerState,
       blindLevel: nextBlindLevel,
-      startedAt: Date.now(),
+      startedAt: serverNow(),
       pausedElapsedSeconds: 0,
       intervalStartedAt: null,
       intervalExtraMinutes: 0,
@@ -516,6 +510,36 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
 
     await saveTimerState(newState);
   };
+
+  // ============ AUTO-AVANÇO DE BLIND ============
+  useEffect(() => {
+    if (
+      canControl &&
+      timerState.status === 'running' &&
+      !timerState.lastBlindMode &&
+      remainingSeconds <= 0 &&
+      autoAdvancedForLevelRef.current !== timerState.blindLevel
+    ) {
+      autoAdvancedForLevelRef.current = timerState.blindLevel;
+      void handleNextBlind();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [remainingSeconds, timerState.status, timerState.blindLevel, timerState.lastBlindMode, canControl]);
+
+  // ============ FLASH AO MUDAR DE BLIND ============
+  useEffect(() => {
+    if (prevBlindLevelRef.current !== -1 && timerState.blindLevel !== prevBlindLevelRef.current && isMaximized) {
+      setIsFlashing(true);
+      if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
+      flashTimeoutRef.current = setTimeout(() => {
+        setIsFlashing(false);
+      }, 3000);
+    }
+    prevBlindLevelRef.current = timerState.blindLevel;
+    return () => {
+      if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
+    };
+  }, [timerState.blindLevel, isMaximized]);
 
   // ============ RENDERIZAÇÃO ============
   const timerDisplay = formatTime(remainingSeconds);
@@ -568,13 +592,13 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
       {/* Blinds */}
       <div className="flex items-center justify-between rounded-lg bg-[#1b3e52]/50 p-6">
         <div className="text-center">
-          <p className="text-lg text-slate-300 font-semibold">Small Blind</p>
-          <p className="text-4xl font-bold text-emerald-400">{currentBlind.smallBlind}</p>
+          <p className="text-base text-slate-300 font-semibold">Small Blind</p>
+          <p className="text-6xl font-bold text-emerald-400">{currentBlind.smallBlind}</p>
         </div>
         <div className="h-16 border-l-2 border-[#2d4659]" />
         <div className="text-center">
-          <p className="text-lg text-slate-300 font-semibold">Big Blind</p>
-          <p className="text-4xl font-bold text-emerald-400">{currentBlind.bigBlind}</p>
+          <p className="text-base text-slate-300 font-semibold">Big Blind</p>
+          <p className="text-6xl font-bold text-emerald-400">{currentBlind.bigBlind}</p>
         </div>
       </div>
 
@@ -721,17 +745,17 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
           {forcedPanelMode ? '⬇️ Minimizar' : '✕ Sair'}
         </button>
 
-        <div className="w-full h-full flex flex-col items-center justify-center gap-12">
+        <div className={['w-full h-full flex flex-col items-center justify-center gap-12', isFlashing ? 'animate-blind-flash' : ''].join(' ')}>
           {/* Blinds Gigante */}
           <div className="flex items-center justify-between gap-16 rounded-2xl bg-[#1b3e52]/70 p-12 w-full max-w-5xl">
             <div className="text-center flex-1">
               <p className="text-4xl text-slate-300 font-semibold mb-4">Small Blind</p>
-              <p className="text-8xl font-bold text-emerald-400">{currentBlindMaximized.smallBlind}</p>
+              <p className="text-[10rem] leading-none font-bold text-emerald-400">{currentBlindMaximized.smallBlind}</p>
             </div>
             <div className="h-32 border-l-4 border-[#2d4659]" />
             <div className="text-center flex-1">
               <p className="text-4xl text-slate-300 font-semibold mb-4">Big Blind</p>
-              <p className="text-8xl font-bold text-emerald-400">{currentBlindMaximized.bigBlind}</p>
+              <p className="text-[10rem] leading-none font-bold text-emerald-400">{currentBlindMaximized.bigBlind}</p>
             </div>
           </div>
 

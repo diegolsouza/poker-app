@@ -9,6 +9,16 @@
 		linear-gradient(180deg, #061019 0%, #07131d 42%, #081723 100%);
 }
 
+@keyframes blind-flash {
+  0%, 100% { opacity: 1; filter: brightness(1); }
+  25%, 75% { opacity: 0.2; filter: brightness(3); }
+  50% { opacity: 1; filter: brightness(2); }
+}
+
+.animate-blind-flash {
+  animation: blind-flash 0.5s ease-in-out 6;
+}
+
 html {
 	background: #061019;
 }
