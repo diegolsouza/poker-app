@@ -746,16 +746,23 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
         </button>
 
         <div className={['w-full h-full flex flex-col items-center justify-center gap-12', isFlashing ? 'animate-blind-flash' : ''].join(' ')}>
+          {/* Aviso ANTE EM JOGO */}
+          {currentBlindMaximized.showAnte && (
+            <div className="animate-pulse rounded-3xl bg-gradient-to-r from-red-600 via-yellow-600 to-red-600 p-8 w-full max-w-5xl border-4 border-red-400 shadow-[0_0_50px_rgba(220,38,38,0.6)]">
+              <p className="text-8xl font-black text-white drop-shadow-lg">⚠️ ANTE EM JOGO! ⚠️</p>
+            </div>
+          )}
+
           {/* Blinds Gigante */}
           <div className="flex items-center justify-between gap-16 rounded-2xl bg-[#1b3e52]/70 p-12 w-full max-w-5xl">
             <div className="text-center flex-1">
               <p className="text-4xl text-slate-300 font-semibold mb-4">Small Blind</p>
-              <p className="text-[10rem] leading-none font-bold text-emerald-400">{currentBlindMaximized.smallBlind}</p>
+              <p className="text-[14rem] leading-none font-black text-emerald-400 drop-shadow-lg">{currentBlindMaximized.smallBlind}</p>
             </div>
-            <div className="h-32 border-l-4 border-[#2d4659]" />
+            <div className="h-40 border-l-4 border-[#2d4659]" />
             <div className="text-center flex-1">
               <p className="text-4xl text-slate-300 font-semibold mb-4">Big Blind</p>
-              <p className="text-[10rem] leading-none font-bold text-emerald-400">{currentBlindMaximized.bigBlind}</p>
+              <p className="text-[14rem] leading-none font-black text-emerald-400 drop-shadow-lg">{currentBlindMaximized.bigBlind}</p>
             </div>
           </div>
 
