@@ -161,20 +161,45 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked }: Poke
         last_blind_started_at: newState.lastBlindStartedAt ? new Date(newState.lastBlindStartedAt).toISOString() : null,
       };
 
-      const { error: upsertError } = await supabase
-        .from('poker_timer_etapa')
-        .upsert(payload);
+      console.log('Payload para salvar:', payload);
 
-      if (upsertError) {
-        console.error('Erro de Supabase ao salvar timer:', upsertError.message, upsertError.code);
-        throw upsertError;
+      // Tentar fazer update primeiro
+      const { data: updateData, error: updateError } = await supabase
+        .from('poker_timer_etapa')
+        .update(payload)
+        .eq('etapa_id', etapaId)
+        .select();
+
+      if (updateError) {
+        console.error('Erro de update no Supabase:', updateError.message, updateError.code);
+        throw updateError;
+      }
+
+      // Se nenhuma linha foi atualizada, inserir
+      if (updateData && updateData.length === 0) {
+        console.log('Nenhuma linha atualizada, tentando inserir...');
+        const { data: insertData, error: insertError } = await supabase
+          .from('poker_timer_etapa')
+          .insert([payload])
+          .select();
+
+        if (insertError) {
+          console.error('Erro de insert no Supabase:', insertError.message, insertError.code);
+          throw insertError;
+        }
+
+        console.log('Insert realizado com sucesso:', insertData);
+      } else {
+        console.log('Update realizado com sucesso:', updateData);
       }
 
       setTimerState(newState);
       setError(null);
-    } catch (err) {
-      console.error('Erro ao salvar timer:', err);
-      setError('Erro ao salvar timer');
+    } catch (err: any) {
+      console.error('Erro completo ao salvar timer:', err);
+      console.error('Mensagem:', err?.message);
+      console.error('Código:', err?.code);
+      setError(`Erro ao salvar timer: ${err?.message || 'desconhecido'}`);
     }
   };
 
