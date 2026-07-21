@@ -90,7 +90,10 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked }: Poke
         .eq('etapa_id', etapaId)
         .maybeSingle();
 
-      if (loadError) throw loadError;
+      if (loadError) {
+        console.error('Erro de Supabase ao carregar timer:', loadError.message, loadError.code);
+        throw loadError;
+      }
 
       if (data) {
         setTimerState({
@@ -104,10 +107,11 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked }: Poke
           lastBlindMode: data.last_blind_mode || false,
           lastBlindStartedAt: timestampToMs(data.last_blind_started_at),
         });
+      } else {
+        setError(null);
       }
     } catch (err) {
       console.error('Erro ao carregar estado do timer:', err);
-      setError('Erro ao carregar timer');
     }
   };
 
@@ -159,9 +163,12 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked }: Poke
 
       const { error: upsertError } = await supabase
         .from('poker_timer_etapa')
-        .upsert(payload, { onConflict: 'etapa_id' });
+        .upsert(payload);
 
-      if (upsertError) throw upsertError;
+      if (upsertError) {
+        console.error('Erro de Supabase ao salvar timer:', upsertError.message, upsertError.code);
+        throw upsertError;
+      }
 
       setTimerState(newState);
       setError(null);
@@ -409,28 +416,28 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked }: Poke
       )}
 
       {/* Blinds */}
-      <div className="flex items-center justify-between rounded-lg bg-[#1b3e52]/50 p-4">
+      <div className="flex items-center justify-between rounded-lg bg-[#1b3e52]/50 p-6">
         <div className="text-center">
-          <p className="text-sm text-slate-300">Small Blind</p>
-          <p className="text-2xl font-bold text-emerald-400">{currentBlind.smallBlind}</p>
+          <p className="text-lg text-slate-300 font-semibold">Small Blind</p>
+          <p className="text-4xl font-bold text-emerald-400">{currentBlind.smallBlind}</p>
         </div>
-        <div className="h-10 border-l border-[#2d4659]" />
+        <div className="h-16 border-l-2 border-[#2d4659]" />
         <div className="text-center">
-          <p className="text-sm text-slate-300">Big Blind</p>
-          <p className="text-2xl font-bold text-emerald-400">{currentBlind.bigBlind}</p>
+          <p className="text-lg text-slate-300 font-semibold">Big Blind</p>
+          <p className="text-4xl font-bold text-emerald-400">{currentBlind.bigBlind}</p>
         </div>
       </div>
 
       {/* Timer gigante */}
       <div className={[
-        'rounded-lg p-6 text-center font-mono font-bold',
+        'rounded-lg p-8 text-center font-mono font-bold',
         timerState.status === 'interval'
           ? 'bg-red-500/20 border-2 border-red-500/40'
           : isLastMinute
             ? 'bg-yellow-500/20 border-2 border-yellow-500/40'
             : 'bg-[#1b3e52]/50 border-2 border-[#2d4659]',
       ].join(' ')}>
-        <p className="text-5xl sm:text-6xl tabular-nums text-slate-100">{timerDisplay}</p>
+        <p className="text-6xl sm:text-7xl tabular-nums text-slate-100">{timerDisplay}</p>
       </div>
 
       {/* Status do timer */}
@@ -534,18 +541,106 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked }: Poke
 
   // ============ MODO MAXIMIZADO ============
   if (isMaximized) {
+    const timerDisplayMaximized = formatTime(remainingSeconds);
+    const currentBlindMaximized = BLIND_LEVELS[timerState.blindLevel] || BLIND_LEVELS[0];
+    
     return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 bg-black p-4 sm:p-8">
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-8 bg-black p-8">
         <button
           type="button"
           onClick={() => setIsMaximized(false)}
-          className="absolute top-4 right-4 rounded-lg bg-slate-700 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:bg-slate-600"
+          className="absolute top-6 right-6 rounded-lg bg-slate-700 px-6 py-3 text-lg font-semibold text-slate-100 transition hover:bg-slate-600"
         >
           ✕ Sair
         </button>
 
-        <div className="w-full max-w-2xl">
-          {timerContent}
+        <div className="w-full h-full flex flex-col items-center justify-center gap-12">
+          {/* Blinds Gigante */}
+          <div className="flex items-center justify-between gap-16 rounded-2xl bg-[#1b3e52]/70 p-12 w-full max-w-5xl">
+            <div className="text-center flex-1">
+              <p className="text-4xl text-slate-300 font-semibold mb-4">Small Blind</p>
+              <p className="text-8xl font-bold text-emerald-400">{currentBlindMaximized.smallBlind}</p>
+            </div>
+            <div className="h-32 border-l-4 border-[#2d4659]" />
+            <div className="text-center flex-1">
+              <p className="text-4xl text-slate-300 font-semibold mb-4">Big Blind</p>
+              <p className="text-8xl font-bold text-emerald-400">{currentBlindMaximized.bigBlind}</p>
+            </div>
+          </div>
+
+          {/* Timer Gigante */}
+          <div className={[
+            'rounded-3xl p-16 text-center font-mono font-bold w-full max-w-5xl',
+            timerState.status === 'interval'
+              ? 'bg-red-500/30 border-4 border-red-500/50'
+              : isLastMinute
+                ? 'bg-yellow-500/30 border-4 border-yellow-500/50'
+                : 'bg-[#1b3e52]/70 border-4 border-[#2d4659]',
+          ].join(' ')}>\n            <p className="text-9xl tabular-nums text-slate-100">{timerDisplayMaximized}</p>
+          </div>
+
+          {/* Controles em modo maximizado */}
+          {canControl && (
+            <div className="grid grid-cols-4 gap-4 w-full max-w-5xl">
+              <button
+                type="button"
+                onClick={handleStart}
+                disabled={timerState.status === 'running'}
+                className={[
+                  'rounded-xl px-6 py-4 text-lg font-semibold transition',
+                  timerState.status === 'running'
+                    ? 'bg-slate-600/40 text-slate-400 cursor-not-allowed'
+                    : 'bg-emerald-500 text-emerald-950 hover:bg-emerald-400',
+                ].join(' ')}
+              >
+                ▶️ Iniciar
+              </button>
+
+              <button
+                type="button"
+                onClick={handlePause}
+                disabled={timerState.status === 'stopped' || timerState.status === 'interval'}
+                className={[
+                  'rounded-xl px-6 py-4 text-lg font-semibold transition',
+                  timerState.status === 'stopped' || timerState.status === 'interval'
+                    ? 'bg-slate-600/40 text-slate-400 cursor-not-allowed'
+                    : timerState.status === 'running'
+                      ? 'bg-yellow-500 text-yellow-950 hover:bg-yellow-400'
+                      : 'bg-blue-500 text-blue-950 hover:bg-blue-400',
+                ].join(' ')}
+              >
+                {timerState.status === 'running' ? '⏸️ Pausar' : '▶️ Retomar'}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleInterval}
+                disabled={timerState.status !== 'running'}
+                className={[
+                  'rounded-xl px-6 py-4 text-lg font-semibold transition',
+                  timerState.status !== 'running'
+                    ? 'bg-slate-600/40 text-slate-400 cursor-not-allowed'
+                    : 'bg-orange-500 text-orange-950 hover:bg-orange-400',
+                ].join(' ')}
+              >
+                🔴 Intervalo
+              </button>
+
+              <button
+                type="button"
+                onClick={handleReset}
+                disabled={timerState.status === 'stopped'}
+                className={[
+                  'rounded-xl px-6 py-4 text-lg font-semibold transition',
+                  timerState.status === 'stopped'
+                    ? 'bg-slate-600/40 text-slate-400 cursor-not-allowed'
+                    : 'bg-rose-500 text-rose-950 hover:bg-rose-400',
+                ].join(' ')}
+              >
+                🔄 Reset
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );
