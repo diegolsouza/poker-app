@@ -533,7 +533,7 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked }: Poke
   );
 
   // ============ MODO MAXIMIZADO ============
-  if (isMaximized && !isLoading) {
+  if (isMaximized) {
     return (
       <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 bg-black p-4 sm:p-8">
         <button
