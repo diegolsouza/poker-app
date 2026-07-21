@@ -220,6 +220,7 @@ export default function DiaDePoker() {
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isPanelMode, setIsPanelMode] = useState<boolean>(false);
   const [speechSupported, setSpeechSupported] = useState<boolean>(false);
   const [listeningMesa, setListeningMesa] = useState<MesaId | null>(null);
   const [mesaPins, setMesaPins] = useState<MesaPinState>({ 1: '', 2: '', 3: '', 4: '' });
@@ -1546,11 +1547,24 @@ export default function DiaDePoker() {
   return (
     <section className="grid gap-6">
       <header className="rounded-2xl border border-[#2d4659]/70 bg-[#0d2431]/80 p-5 shadow-[0_14px_34px_rgba(0,0,0,0.35)]">
-        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#ff8d4d]">Painel em tempo real</p>
-        <h1 className="mt-2 text-2xl font-semibold text-slate-100 sm:text-3xl">Dia de Poker</h1>
-        <p className="mt-2 text-sm text-slate-300">
-          Controle de etapa, operação dos mesários e registro incremental de rebuys/add-on por voz e manual.
-        </p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#ff8d4d]">Painel em tempo real</p>
+            <h1 className="mt-2 text-2xl font-semibold text-slate-100 sm:text-3xl">Dia de Poker</h1>
+            <p className="mt-2 text-sm text-slate-300">
+              Controle de etapa, operação dos mesários e registro incremental de rebuys/add-on por voz e manual.
+            </p>
+          </div>
+          {!canViewAdminTab && selectedEtapaId && (
+            <button
+              type="button"
+              onClick={() => setIsPanelMode(!isPanelMode)}
+              className="hidden sm:block rounded-lg bg-[#ff5e00] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#ff7e38] whitespace-nowrap"
+            >
+              📺 Modo Painel
+            </button>
+          )}
+        </div>
       </header>
 
       <div className="rounded-2xl border border-[#2d4659]/70 bg-[#0d2431]/80 p-3 shadow-[0_14px_34px_rgba(0,0,0,0.35)]">
@@ -1573,6 +1587,16 @@ export default function DiaDePoker() {
         </div>
       </div>
 
+      {/* Mostrar timer de poker para todas as mesas - acima dos botões */}
+      {activeMesa && selectedEtapaId ? (
+        <PokerTimer
+          etapaId={Number(selectedEtapaId)}
+          isAdmin={canViewAdminTab}
+          isMesarioUnlocked={mesaUnlocked[activeMesa]}
+          forcedPanelMode={isPanelMode}
+        />
+      ) : null}
+
       {isLoading ? <p className="text-sm text-slate-300">Carregando dados...</p> : null}
 
       {error ? <p className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">{error}</p> : null}
@@ -1588,15 +1612,6 @@ export default function DiaDePoker() {
       </div>
 
       {canViewAdminTab && tab === 'admin' ? renderAdminTab() : null}
-      
-      {/* Mostrar timer de poker para todas as mesas */}
-      {activeMesa && selectedEtapaId ? (
-        <PokerTimer
-          etapaId={Number(selectedEtapaId)}
-          isAdmin={canViewAdminTab}
-          isMesarioUnlocked={mesaUnlocked[activeMesa]}
-        />
-      ) : null}
 
       {activeMesa === 1 ? renderMesaTab(1) : null}
       {activeMesa === 2 ? renderMesaTab(2) : null}

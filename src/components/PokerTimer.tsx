@@ -57,9 +57,10 @@ interface PokerTimerProps {
   etapaId: number;
   isAdmin: boolean;
   isMesarioUnlocked: boolean;
+  forcedPanelMode?: boolean;
 }
 
-export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked }: PokerTimerProps) {
+export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forcedPanelMode = false }: PokerTimerProps) {
   const [timerState, setTimerState] = useState<TimerState>({
     status: 'stopped',
     blindLevel: 0,
@@ -72,7 +73,7 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked }: Poke
     lastBlindStartedAt: null,
   });
 
-  const [isMaximized, setIsMaximized] = useState(false);
+  const [isMaximized, setIsMaximized] = useState(forcedPanelMode);
   const [currentTime, setCurrentTime] = useState<number>(Date.now());
   const [error, setError] = useState<string | null>(null);
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -80,6 +81,9 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked }: Poke
   const lastSyncRef = useRef<number>(0);
 
   const canControl = isAdmin || isMesarioUnlocked;
+
+  // Ocultar timer nas páginas públicas até que seja iniciado (a menos que esteja em modo painel forçado)
+  const showTimer = forcedPanelMode || timerState.status !== 'stopped' || isAdmin || isMesarioUnlocked;
 
   // ============ CARREGAMENTO INICIAL E SINCRONIZAÇÃO ============
   const loadTimerState = async () => {
@@ -133,6 +137,11 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked }: Poke
       if (syncIntervalRef.current) clearInterval(syncIntervalRef.current);
     };
   }, [etapaId]);
+
+  // Sincronizar forcedPanelMode com isMaximized
+  useEffect(() => {
+    setIsMaximized(forcedPanelMode);
+  }, [forcedPanelMode]);
 
   // ============ TICK DO TIMER ============
   useEffect(() => {
@@ -223,7 +232,7 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked }: Poke
 
       if (timerState.startedAt) {
         const elapsed = Math.floor((currentTime - timerState.startedAt) / 1000);
-        return timerState.pausedElapsedSeconds + elapsed;
+        return elapsed;
       }
     }
 
@@ -452,6 +461,11 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked }: Poke
   // ============ RENDERIZAÇÃO ============
   const timerDisplay = formatTime(remainingSeconds);
 
+  // Ocultar timer nas páginas públicas até iniciar
+  if (!showTimer) {
+    return null;
+  }
+
   const timerContent = (
     <div className="grid gap-4">
       {/* Título e info de blind */}
@@ -645,7 +659,7 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked }: Poke
           onClick={() => setIsMaximized(false)}
           className="absolute top-6 right-6 rounded-lg bg-slate-700 px-6 py-3 text-lg font-semibold text-slate-100 transition hover:bg-slate-600"
         >
-          ✕ Sair
+          {forcedPanelMode ? '⬇️ Minimizar' : '✕ Sair'}
         </button>
 
         <div className="w-full h-full flex flex-col items-center justify-center gap-12">
