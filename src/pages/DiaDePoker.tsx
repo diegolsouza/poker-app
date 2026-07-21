@@ -1567,6 +1567,16 @@ export default function DiaDePoker() {
         </div>
       </header>
 
+      {/* Timer de poker - logo abaixo do cabeçalho */}
+      {activeMesa && selectedEtapaId ? (
+        <PokerTimer
+          etapaId={Number(selectedEtapaId)}
+          isAdmin={canViewAdminTab}
+          isMesarioUnlocked={mesaUnlocked[activeMesa]}
+          forcedPanelMode={isPanelMode}
+        />
+      ) : null}
+
       <div className="rounded-2xl border border-[#2d4659]/70 bg-[#0d2431]/80 p-3 shadow-[0_14px_34px_rgba(0,0,0,0.35)]">
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {visibleTabs.map((tabKey) => (
@@ -1588,14 +1598,7 @@ export default function DiaDePoker() {
       </div>
 
       {/* Mostrar timer de poker para todas as mesas - acima dos botões */}
-      {activeMesa && selectedEtapaId ? (
-        <PokerTimer
-          etapaId={Number(selectedEtapaId)}
-          isAdmin={canViewAdminTab}
-          isMesarioUnlocked={mesaUnlocked[activeMesa]}
-          forcedPanelMode={isPanelMode}
-        />
-      ) : null}
+      {/* Timer movido para logo abaixo do header */}
 
       {isLoading ? <p className="text-sm text-slate-300">Carregando dados...</p> : null}
 

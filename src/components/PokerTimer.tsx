@@ -290,7 +290,7 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
       }
 
       if (timerState.startedAt) {
-        const elapsed = Math.floor((currentTime - timerState.startedAt) / 1000);
+        const elapsed = timerState.pausedElapsedSeconds + Math.floor((currentTime - timerState.startedAt) / 1000);
         return elapsed;
       }
     }
@@ -356,7 +356,7 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
         status: 'running',
         startedAt: Date.now(),
         pausedAt: null,
-        pausedElapsedSeconds: 0,
+        // pausedElapsedSeconds mantido: será somado ao elapsed desde startedAt
       };
 
       await saveTimerState(newState);
@@ -712,7 +712,7 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
     const currentBlindMaximized = blindLevels[timerState.blindLevel] || blindLevels[0];
     
     return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-8 bg-black p-8">
+      <div className={['fixed inset-0 z-50 flex flex-col items-center justify-center gap-8 p-8 transition-colors duration-500', timerState.status === 'running' ? 'bg-green-950' : timerState.status === 'interval' ? 'bg-red-950' : 'bg-black'].join(' ')}>
         <button
           type="button"
           onClick={() => setIsMaximized(false)}
