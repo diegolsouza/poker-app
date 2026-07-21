@@ -23,21 +23,6 @@ type TimerState = {
   lastBlindStartedAt: number | null;
 };
 
-type DbTimerRow = {
-  id: number;
-  etapa_id: number;
-  status: TimerStatus;
-  blind_level: number;
-  started_at: string | null;
-  paused_at: string | null;
-  paused_elapsed_seconds: number;
-  interval_started_at: string | null;
-  interval_extra_minutes: number;
-  last_blind_mode: boolean;
-  last_blind_started_at: string | null;
-  updated_at: string;
-};
-
 // ===================== CONSTANTES =====================
 const BLIND_LEVELS: BlindLevel[] = [
   { smallBlind: 50, bigBlind: 100, minutes: 20, showAnte: false },
@@ -53,7 +38,6 @@ const BLIND_LEVELS: BlindLevel[] = [
 ];
 
 const INTERVAL_BASE_MINUTES = 20;
-const INTERVAL_EXTRA_MINUTES = 10;
 const LAST_BLIND_DURATION_SECONDS = 15 * 60; // 15 minutos
 
 // ===================== UTILITÁRIOS =====================
@@ -90,7 +74,6 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked }: Poke
 
   const [isMaximized, setIsMaximized] = useState(false);
   const [currentTime, setCurrentTime] = useState<number>(Date.now());
-  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const syncIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
