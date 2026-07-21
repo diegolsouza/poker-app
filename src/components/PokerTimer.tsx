@@ -65,7 +65,9 @@ function formatTime(seconds: number): string {
 
 function timestampToMs(isoString: string | null): number | null {
   if (!isoString) return null;
-  return new Date(isoString).getTime();
+  // Supabase retorna timestamps sem 'Z', causando interpretação como hora local em vez de UTC
+  const utcString = isoString.endsWith('Z') || isoString.includes('+') ? isoString : `${isoString}Z`;
+  return new Date(utcString).getTime();
 }
 
 // ===================== COMPONENTE PRINCIPAL =====================
