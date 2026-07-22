@@ -438,6 +438,8 @@ export default function ModalEstatisticas({ jogadorId, jogadorNome, isOpen, onCl
     const totalGastosFinanceiros = totalGastoBuyIn + totalGastoRebuy + totalGastoAddon;
     const mediaRebuyPorParticipacao = totalParticipacoes > 0 ? totalRebuys / totalParticipacoes : 0;
     const mediaPontosPorParticipacao = totalParticipacoes > 0 ? totalPontos / totalParticipacoes : 0;
+    const taxaMesaFinal = totalParticipacoes > 0 ? (totalMesaFinal / totalParticipacoes) * 100 : 0;
+    const taxaPodioQuandoMesaFinal = totalMesaFinal > 0 ? (totalPodios / totalMesaFinal) * 100 : 0;
 
     return {
       totalPontos,
@@ -448,6 +450,8 @@ export default function ModalEstatisticas({ jogadorId, jogadorNome, isOpen, onCl
       totalMesaFinal,
       mediaRebuyPorParticipacao,
       mediaPontosPorParticipacao,
+      taxaMesaFinal,
+      taxaPodioQuandoMesaFinal,
       totalVitorias: registros.filter((item) => item.colocacao === 1).length,
       totalPremiacoesRecebidas,
       totalGastoBuyIn,
@@ -639,7 +643,7 @@ export default function ModalEstatisticas({ jogadorId, jogadorNome, isOpen, onCl
 
     const pontosPosicao = evolucaoTemporadas.map((item, index) => {
       const x = paddingLeft + index * xStep;
-      const y = paddingTop + chartHeight * (1 - (item.posicaoFinal - 1) / rangePos);
+      const y = paddingTop + chartHeight * ((item.posicaoFinal - 1) / rangePos);
       return { x, y, label: item.codigoTemporada, valor: item.posicaoFinal };
     });
 
@@ -694,13 +698,28 @@ export default function ModalEstatisticas({ jogadorId, jogadorNome, isOpen, onCl
         <div className="flex-1 space-y-4 overflow-y-auto p-4 sm:space-y-5 sm:p-6">
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 sm:gap-3 lg:grid-cols-7">
             <article className="rounded-xl border border-[#244357] bg-[#102536] p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#ff9a63]">Participações</p>
+              <p className="mt-2 text-xl font-bold text-slate-50 sm:text-2xl">{estatisticas.totalParticipacoes}</p>
+            </article>
+
+            <article className="rounded-xl border border-[#244357] bg-[#102536] p-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-[#ff9a63]">Pontos Ganhos</p>
               <p className="mt-2 text-xl font-bold text-slate-50 sm:text-2xl">{estatisticas.totalPontos}</p>
             </article>
 
             <article className="rounded-xl border border-[#244357] bg-[#102536] p-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[#ff9a63]">Participações</p>
-              <p className="mt-2 text-xl font-bold text-slate-50 sm:text-2xl">{estatisticas.totalParticipacoes}</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#ff9a63]">Média de Pontos por Participação</p>
+              <p className="mt-2 text-xl font-bold text-slate-50 sm:text-2xl">{formatDecimal(estatisticas.mediaPontosPorParticipacao)}</p>
+            </article>
+
+            <article className="rounded-xl border border-[#244357] bg-[#102536] p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#ff9a63]">Melhor Mão</p>
+              <p className="mt-2 text-xl font-bold text-slate-50 sm:text-2xl">{estatisticas.totalMelhorMao}</p>
+            </article>
+
+            <article className="rounded-xl border border-[#244357] bg-[#102536] p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#ff9a63]">Rebuys</p>
+              <p className="mt-2 text-xl font-bold text-slate-50 sm:text-2xl">{estatisticas.totalRebuys}</p>
             </article>
 
             <article className="rounded-xl border border-[#244357] bg-[#102536] p-3">
@@ -710,22 +729,9 @@ export default function ModalEstatisticas({ jogadorId, jogadorNome, isOpen, onCl
 
             <article className="rounded-xl border border-[#244357] bg-[#102536] p-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-[#ff9a63]">Vezes na Mesa Final</p>
-              <p className="mt-2 text-xl font-bold text-slate-50 sm:text-2xl">{estatisticas.totalMesaFinal}</p>
-            </article>
-
-            <article className="rounded-xl border border-[#244357] bg-[#102536] p-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[#ff9a63]">Média de Pontos por Participação</p>
-              <p className="mt-2 text-xl font-bold text-slate-50 sm:text-2xl">{formatDecimal(estatisticas.mediaPontosPorParticipacao)}</p>
-            </article>
-
-            <article className="rounded-xl border border-[#244357] bg-[#102536] p-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[#ff9a63]">Rebuys</p>
-              <p className="mt-2 text-xl font-bold text-slate-50 sm:text-2xl">{estatisticas.totalRebuys}</p>
-            </article>
-
-            <article className="rounded-xl border border-[#244357] bg-[#102536] p-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[#ff9a63]">Melhor Mão</p>
-              <p className="mt-2 text-xl font-bold text-slate-50 sm:text-2xl">{estatisticas.totalMelhorMao}</p>
+              <p className="mt-2 text-xl font-bold text-slate-50 sm:text-2xl">
+                {estatisticas.totalMesaFinal} ({formatPercent(estatisticas.taxaMesaFinal)})
+              </p>
             </article>
 
             <article className="rounded-xl border border-[#244357] bg-[#102536] p-3">
@@ -751,6 +757,19 @@ export default function ModalEstatisticas({ jogadorId, jogadorNome, isOpen, onCl
               <p className="mt-1 text-xs text-slate-300">{estatisticas.totalVitorias} vitórias em {estatisticas.totalParticipacoes} participações</p>
             </article>
           </div>
+
+          <section className="rounded-xl border border-[#244357] bg-[#102536] p-3 sm:p-4">
+            <h3 className="text-sm font-semibold text-slate-50 sm:text-base">Análise</h3>
+            <div className="mt-2 space-y-1.5 text-sm text-slate-200">
+              <p>
+                a) Chance de chegar à mesa final: <span className="font-semibold text-sky-300">{formatPercent(estatisticas.taxaMesaFinal)}</span>
+              </p>
+              <p>
+                b) Chegando à mesa final, chance de ficar no pódio:{' '}
+                <span className="font-semibold text-amber-300">{formatPercent(estatisticas.taxaPodioQuandoMesaFinal)}</span>
+              </p>
+            </div>
+          </section>
 
           {error ? <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">{error}</p> : null}
           {isLoading ? <p className="text-sm text-slate-300">Carregando histórico...</p> : null}
