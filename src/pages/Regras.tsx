@@ -147,11 +147,11 @@ export default function Regras() {
                 <li>Quem chegar até 20:00 no salão recebe bônus de 1.000 fichas.</li>
                 <li>Buy-in: 4.000 fichas até 22:00 por {valorBuyIn}.</li>
                 <li>Entrada após 21:00: o jogador se posiciona antes do dealer e paga blind obrigatório.</li>
-                <li>Rebuy: 4.000 fichas por {valorRebuy}, ilimitado, até 22:15.</li>
-                <li>Add-on: 5.000 fichas por {valorAddOn}, liberado no encerramento do rebuy (22:15).</li>
+                <li>Rebuy: 4.000 fichas por {valorRebuy}, ilimitado, até o nível 7 (por volta de 22:30).</li>
+                <li>Add-on: 5.000 fichas por {valorAddOn}, liberado após o nível 7 (por volta de 22:30).</li>
                 <li>Se cair na última mão antes do fim do rebuy, pode fazer rebuy + add-on juntos (9.000 fichas e custo somado).</li>
-                <li>Há intervalo de 20 minutos para janta por volta de 21:30.</li>
-                <li>Encerramento: 24:00 + 3 mãos; ao fim da 3ª mão, contam-se fichas para definir colocação final.</li>
+                <li>Há intervalo de 20 minutos para janta por volta de 21:30. O intervalo pode ter um acréscimo de 10 minutos (esse tempo será acrescido no blind atual). Após 30 minutos, o jogo volta a correr.</li>
+                <li>Encerramento: após o nível 10 (por volta de 24:00) + 3 mãos; ao fim da 3ª mão, contam-se fichas para definir colocação final.</li>
               </ul>
             </article>
 
