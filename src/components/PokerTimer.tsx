@@ -583,7 +583,7 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
     timerState.blindLevel === REBUY_CUTOFF_LEVEL &&
     timerState.status === 'running' &&
     !timerState.lastBlindMode &&
-    remainingSeconds <= 10 &&
+    remainingSeconds <= 20 &&
     remainingSeconds > 0;
 
   // Ocultar timer nas páginas públicas até iniciar
@@ -637,8 +637,8 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
       )}
       {/* Aviso fim do período de rebuy */}
       {showRebuyCutoff && (
-        <div className="rounded-lg border-2 border-orange-400 bg-orange-500/20 p-3 text-center animate-pulse">
-          <p className="text-base font-black text-orange-200 uppercase tracking-wide">🚫 FIM DO PERÍODO DE REBUY!</p>
+        <div className="rounded-xl border-4 border-red-500 bg-red-900/60 p-4 text-center animate-pulse shadow-[0_0_30px_rgba(239,68,68,0.6)]">
+          <p className="text-3xl font-black text-red-200 uppercase tracking-widest">🚫 FIM DO PERÍODO DE REBUY!</p>
         </div>
       )}
       {/* Blinds */}
@@ -788,7 +788,7 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
     const currentBlindMaximized = blindLevels[timerState.blindLevel] || blindLevels[0];
     
     return (
-      <div className={['fixed inset-0 z-50 flex flex-col items-center justify-center gap-8 p-8 transition-colors duration-500', timerState.status === 'running' ? 'bg-green-950' : timerState.status === 'interval' ? 'bg-red-950' : 'bg-black'].join(' ')}>
+      <div className={['fixed inset-0 z-50 flex flex-col items-center justify-center gap-8 p-8 transition-colors duration-500', showRebuyCutoff ? 'bg-black' : timerState.status === 'running' ? 'bg-green-950' : timerState.status === 'interval' ? 'bg-red-950' : 'bg-black'].join(' ')}>
         <button
           type="button"
           onClick={() => setIsMaximized(false)}
@@ -797,6 +797,22 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
           {forcedPanelMode ? '⬇️ Minimizar' : '✕ Sair'}
         </button>
 
+        {showRebuyCutoff ? (
+          <div className="w-full h-full flex flex-col items-center justify-center gap-4">
+            <p
+              className="font-black text-red-500 animate-pulse select-none"
+              style={{ fontSize: 'clamp(8rem, 40vw, 40rem)', lineHeight: 1 }}
+            >
+              !
+            </p>
+            <p
+              className="font-black text-red-400 animate-pulse text-center uppercase tracking-widest"
+              style={{ fontSize: 'clamp(3rem, 10vw, 12rem)', lineHeight: 1.1 }}
+            >
+              FIM DO REBUY
+            </p>
+          </div>
+        ) : (
         <div className={['w-full h-full flex flex-col items-center justify-center gap-12', isFlashing ? 'animate-blind-flash' : ''].join(' ')}>
           {/* Aviso ANTE EM JOGO */}
           {currentBlindMaximized.showAnte && (
@@ -929,6 +945,7 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
             </>
           )}
         </div>
+        )}
       </div>
     );
   }
