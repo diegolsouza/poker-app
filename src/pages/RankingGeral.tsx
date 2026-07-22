@@ -193,6 +193,7 @@ export default function RankingGeral() {
   const [error, setError] = useState<string | null>(null);
   const [modalAberta, setModalAberta] = useState(false);
   const [idJogadorSelecionado, setIdJogadorSelecionado] = useState<string | null>(null);
+  const [nomeJogadorSelecionado, setNomeJogadorSelecionado] = useState('');
 
   useEffect(() => {
     const loadBaseData = async () => {
@@ -340,8 +341,9 @@ export default function RankingGeral() {
 
   const carregando = isLoadingBase || isLoadingRanking;
 
-  const handleOpenModal = (jogadorId: number) => {
+  const handleOpenModal = (jogadorId: number, nomeJogador: string) => {
     setIdJogadorSelecionado(String(jogadorId));
+    setNomeJogadorSelecionado(nomeJogador);
     setModalAberta(true);
   };
 
@@ -415,7 +417,7 @@ export default function RankingGeral() {
                     <div className="min-w-0 flex-1">
                       <button
                         type="button"
-                        onClick={() => handleOpenModal(row.jogadorId)}
+                        onClick={() => handleOpenModal(row.jogadorId, row.nome)}
                         className="w-full truncate text-left text-sm font-semibold text-[#ff9a63] transition hover:text-[#ffb387]"
                       >
                         {row.nome}
@@ -499,7 +501,7 @@ export default function RankingGeral() {
                     <td className="px-1 py-2 font-semibold text-slate-100 whitespace-nowrap">
                       <button
                         type="button"
-                        onClick={() => handleOpenModal(row.jogadorId)}
+                        onClick={() => handleOpenModal(row.jogadorId, row.nome)}
                         className="cursor-pointer font-medium text-[#ff9a63] transition hover:text-[#ffb387]"
                       >
                         {row.nome}
@@ -533,6 +535,7 @@ export default function RankingGeral() {
 
       <ModalEstatisticas
         jogadorId={idJogadorSelecionado ?? ''}
+        jogadorNome={nomeJogadorSelecionado}
         isOpen={modalAberta}
         onClose={handleCloseModal}
       />

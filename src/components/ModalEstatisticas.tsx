@@ -11,6 +11,7 @@ import {
 
 type ModalEstatisticasProps = {
   jogadorId: string;
+  jogadorNome: string;
   isOpen: boolean;
   onClose: () => void;
 };
@@ -227,7 +228,7 @@ function buildLinePath(points: string[]): string {
   return `M ${points.join(' L ')}`;
 }
 
-export default function ModalEstatisticas({ jogadorId, isOpen, onClose }: ModalEstatisticasProps) {
+export default function ModalEstatisticas({ jogadorId, jogadorNome, isOpen, onClose }: ModalEstatisticasProps) {
   const [registros, setRegistros] = useState<RegistroHistorico[]>([]);
   const [registrosGlobais, setRegistrosGlobais] = useState<RegistroGlobal[]>([]);
   const [pointsRules, setPointsRules] = useState(DEFAULT_POINTS_RULES);
@@ -369,6 +370,7 @@ export default function ModalEstatisticas({ jogadorId, isOpen, onClose }: ModalE
     const totalRebuys = registros.reduce((acc, item) => acc + (item.rebuys ?? 0), 0);
     const totalMelhorMao = registros.filter((item) => item.melhor_mao).length;
     const totalPodios = registros.filter((item) => item.colocacao !== null && item.colocacao >= 1 && item.colocacao <= 5).length;
+    const totalMesaFinal = registros.filter((item) => item.colocacao !== null && item.colocacao >= 1 && item.colocacao <= 9).length;
 
     let totalPremiacoesRecebidas = 0;
     let totalGastoBuyIn = 0;
@@ -434,6 +436,8 @@ export default function ModalEstatisticas({ jogadorId, isOpen, onClose }: ModalE
       .sort((a, b) => b.nomeTemporada.localeCompare(a.nomeTemporada, 'pt-BR', { numeric: true, sensitivity: 'base' }));
 
     const totalGastosFinanceiros = totalGastoBuyIn + totalGastoRebuy + totalGastoAddon;
+    const mediaRebuyPorParticipacao = totalParticipacoes > 0 ? totalRebuys / totalParticipacoes : 0;
+    const mediaPontosPorParticipacao = totalParticipacoes > 0 ? totalPontos / totalParticipacoes : 0;
 
     return {
       totalPontos,
@@ -441,6 +445,9 @@ export default function ModalEstatisticas({ jogadorId, isOpen, onClose }: ModalE
       totalRebuys,
       totalMelhorMao,
       totalPodios,
+      totalMesaFinal,
+      mediaRebuyPorParticipacao,
+      mediaPontosPorParticipacao,
       totalVitorias: registros.filter((item) => item.colocacao === 1).length,
       totalPremiacoesRecebidas,
       totalGastoBuyIn,
@@ -670,7 +677,7 @@ export default function ModalEstatisticas({ jogadorId, isOpen, onClose }: ModalE
       >
         <header className="flex items-start justify-between border-b border-[#244357] px-4 py-3 sm:items-center sm:px-6 sm:py-4">
           <div>
-            <h2 className="text-base font-bold text-slate-50 sm:text-xl">Histórico Completo do Jogador</h2>
+            <h2 className="text-base font-bold text-slate-50 sm:text-xl">Histórico de {jogadorNome || 'Jogador'}</h2>
             <p className="mt-1 text-xs text-slate-300 sm:text-sm">Dados consolidados de todas as temporadas.</p>
           </div>
 
@@ -697,23 +704,18 @@ export default function ModalEstatisticas({ jogadorId, isOpen, onClose }: ModalE
             </article>
 
             <article className="rounded-xl border border-[#244357] bg-[#102536] p-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[#ff9a63]">Premiações Recebidas</p>
-              <p className="mt-2 text-lg font-bold text-emerald-300 sm:text-2xl">{formatCurrency(estatisticas.totalPremiacoesRecebidas)}</p>
-            </article>
-
-            <article className="rounded-xl border border-[#244357] bg-[#102536] p-3 lg:col-span-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[#ff9a63]">Gasto Buy-in/Rebuy/Add-on</p>
-              <p className="mt-2 text-lg font-bold text-rose-300 sm:text-2xl">-{formatCurrency(estatisticas.totalGastosFinanceiros)}</p>
-              <p className="mt-1 text-xs text-slate-300">
-                B: {formatCurrency(estatisticas.totalGastoBuyIn)} | Rb: {formatCurrency(estatisticas.totalGastoRebuy)} | Ad: {formatCurrency(estatisticas.totalGastoAddon)}
-              </p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#ff9a63]">Média de Rebuy por Participação</p>
+              <p className="mt-2 text-xl font-bold text-slate-50 sm:text-2xl">{formatDecimal(estatisticas.mediaRebuyPorParticipacao)}</p>
             </article>
 
             <article className="rounded-xl border border-[#244357] bg-[#102536] p-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[#ff9a63]">Saldo</p>
-              <p className={`mt-2 text-lg font-bold sm:text-2xl ${estatisticas.saldoFinanceiro >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
-                {formatCurrency(estatisticas.saldoFinanceiro)}
-              </p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#ff9a63]">Vezes na Mesa Final</p>
+              <p className="mt-2 text-xl font-bold text-slate-50 sm:text-2xl">{estatisticas.totalMesaFinal}</p>
+            </article>
+
+            <article className="rounded-xl border border-[#244357] bg-[#102536] p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#ff9a63]">Média de Pontos por Participação</p>
+              <p className="mt-2 text-xl font-bold text-slate-50 sm:text-2xl">{formatDecimal(estatisticas.mediaPontosPorParticipacao)}</p>
             </article>
 
             <article className="rounded-xl border border-[#244357] bg-[#102536] p-3">

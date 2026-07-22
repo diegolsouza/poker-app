@@ -10,6 +10,7 @@ type Etapa = {
   id: number;
   codigo_etapa: string;
   data_etapa: string;
+  status: 'pendente' | 'em_andamento' | 'finalizada';
 };
 
 type Jogador = {
@@ -141,7 +142,11 @@ export default function TelaPix() {
       setError(null);
 
       const [etapasResult, jogadoresResult] = await Promise.all([
-        supabase.from('etapas').select('id, codigo_etapa, data_etapa').order('data_etapa', { ascending: false }),
+        supabase
+          .from('etapas')
+          .select('id, codigo_etapa, data_etapa, status')
+          .eq('status', 'finalizada')
+          .order('data_etapa', { ascending: false }),
         supabase.from('jogadores').select('id, nome').eq('ativo', true).order('nome', { ascending: true }),
       ]);
 
@@ -504,7 +509,7 @@ export default function TelaPix() {
               className="h-11 rounded-lg border border-[#244357] bg-[#0b1a25] px-3 text-slate-50 outline-none transition focus:border-[#ff5e00]"
               disabled={isLoadingEtapas || etapas.length === 0}
             >
-              {etapas.length === 0 ? <option value="">Sem etapas</option> : null}
+              {etapas.length === 0 ? <option value="">Sem etapas finalizadas</option> : null}
               {etapas.map((etapa) => (
                 <option key={etapa.id} value={etapa.id}>
                   {etapa.codigo_etapa} - {new Date(etapa.data_etapa).toLocaleDateString('pt-BR')}
