@@ -54,7 +54,7 @@ const DEFAULT_TIMER_CONFIG: TimerConfig = {
   intervalExtraMinutes: 10,
 };
 
-const LAST_BLIND_DURATION_SECONDS = 15 * 60; // 15 minutos
+const LAST_BLIND_DURATION_SECONDS = 1 * 60; // 15 minutos
 const REBUY_CUTOFF_LEVEL = 6; // índice do nível 7 (base 0) - último nível com rebuy
 
 // ===================== UTILITÁRIOS =====================
@@ -585,6 +585,7 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
     !timerState.lastBlindMode &&
     remainingSeconds <= 20 &&
     remainingSeconds > 0;
+  const showWinner = timerState.lastBlindMode && remainingSeconds <= 0;
 
   // Ocultar timer nas páginas públicas até iniciar
   if (!showTimer) {
@@ -597,7 +598,7 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-3">
           <h3 className="text-xl font-bold text-slate-100">⏱️ Timer de Poker</h3>
-          {currentBlind.showAnte && (
+          {currentBlind.showAnte && timerState.status !== 'interval' && (
             <span className="rounded-lg bg-red-500/20 px-3 py-1 text-xs font-bold text-red-200 uppercase">
               🎰 ANTE EM JOGO
             </span>
@@ -630,18 +631,27 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
       )}
 
       {/* Modo últimas 3 mãos */}
-      {timerState.lastBlindMode && (
+      {timerState.lastBlindMode && !showWinner && (
         <div className="rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-3 text-center animate-pulse">
           <p className="text-lg font-bold text-yellow-200">⚠️ ÚLTIMAS 3 MÃOS</p>
         </div>
       )}
+      {/* Winner */}
+      {showWinner && (
+        <div className="rounded-xl border-2 border-yellow-400 bg-yellow-900/30 p-6 text-center animate-pulse">
+          <p className="text-6xl mb-3">🐔</p>
+          <p className="text-2xl font-black text-yellow-200 uppercase tracking-wide">WINNER WINNER</p>
+          <p className="text-2xl font-black text-yellow-300 uppercase tracking-wide">CHICKEN DINNER!</p>
+        </div>
+      )}
       {/* Aviso fim do período de rebuy */}
       {showRebuyCutoff && (
-        <div className="rounded-xl border-4 border-red-500 bg-red-900/60 p-4 text-center animate-pulse shadow-[0_0_30px_rgba(239,68,68,0.6)]">
-          <p className="text-3xl font-black text-red-200 uppercase tracking-widest">🚫 FIM DO PERÍODO DE REBUY!</p>
+        <div className="animate-rebuy-bg rounded-xl border-4 border-red-500 p-4 text-center shadow-[0_0_40px_rgba(239,68,68,0.7)]">
+          <p className="animate-rebuy-flash text-3xl font-black uppercase tracking-widest">🚫 FIM DO PERÍODO DE REBUY!</p>
         </div>
       )}
       {/* Blinds */}
+      {timerState.status !== 'interval' && (
       <div className="flex items-center justify-between rounded-lg bg-[#1b3e52]/50 p-6">
         <div className="text-center">
           <p className="text-base text-slate-300 font-semibold">Small Blind</p>
@@ -653,8 +663,10 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
           <p className="text-3xl sm:text-6xl font-bold text-emerald-400">{currentBlind.bigBlind}</p>
         </div>
       </div>
+      )}
 
       {/* Timer gigante */}
+      {!timerState.lastBlindMode && (
       <div className={[
         'rounded-lg p-8 text-center font-mono font-bold',
         timerState.status === 'interval'
@@ -665,6 +677,7 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
       ].join(' ')}>
         <p className="text-6xl sm:text-7xl tabular-nums text-slate-100">{timerDisplay}</p>
       </div>
+      )}
 
       {/* Status do timer */}
       {timerState.status !== 'stopped' && (
@@ -788,7 +801,7 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
     const currentBlindMaximized = blindLevels[timerState.blindLevel] || blindLevels[0];
     
     return (
-      <div className={['fixed inset-0 z-50 flex flex-col items-center justify-center gap-8 p-8 transition-colors duration-500', showRebuyCutoff ? 'bg-black' : timerState.status === 'running' ? 'bg-green-950' : timerState.status === 'interval' ? 'bg-red-950' : 'bg-black'].join(' ')}>
+      <div className={['fixed inset-0 z-50 flex flex-col items-center justify-center gap-8 p-8 transition-colors duration-500', showRebuyCutoff ? 'animate-rebuy-bg' : showWinner ? 'bg-yellow-950' : timerState.status === 'running' ? 'bg-green-950' : timerState.status === 'interval' ? 'bg-red-950' : 'bg-black'].join(' ')}>
         <button
           type="button"
           onClick={() => setIsMaximized(false)}
@@ -799,29 +812,28 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
 
         {showRebuyCutoff ? (
           <div className="w-full h-full flex flex-col items-center justify-center gap-4">
-            <p
-              className="font-black text-red-500 animate-pulse select-none"
-              style={{ fontSize: 'clamp(8rem, 40vw, 40rem)', lineHeight: 1 }}
-            >
-              !
-            </p>
-            <p
-              className="font-black text-red-400 animate-pulse text-center uppercase tracking-widest"
-              style={{ fontSize: 'clamp(3rem, 10vw, 12rem)', lineHeight: 1.1 }}
-            >
-              FIM DO REBUY
-            </p>
+            <p className="animate-rebuy-flash font-black select-none" style={{ fontSize: 'clamp(8rem, 40vw, 40rem)', lineHeight: 1 }}>!</p>
+            <p className="animate-rebuy-flash font-black text-center uppercase tracking-widest" style={{ fontSize: 'clamp(3rem, 10vw, 12rem)', lineHeight: 1.1 }}>FIM DO REBUY</p>
+          </div>
+        ) : showWinner ? (
+          <div className="w-full h-full flex flex-col items-center justify-center gap-8">
+            <p className="animate-pulse select-none" style={{ fontSize: 'clamp(8rem, 25vw, 22rem)', lineHeight: 1 }}>🐔</p>
+            <div className="text-center">
+              <p className="font-black text-yellow-300 animate-pulse uppercase tracking-widest" style={{ fontSize: 'clamp(3rem, 8vw, 10rem)', lineHeight: 1.1 }}>WINNER WINNER</p>
+              <p className="font-black text-yellow-200 animate-pulse uppercase tracking-widest" style={{ fontSize: 'clamp(3rem, 8vw, 10rem)', lineHeight: 1.1 }}>CHICKEN DINNER!</p>
+            </div>
           </div>
         ) : (
         <div className={['w-full h-full flex flex-col items-center justify-center gap-12', isFlashing ? 'animate-blind-flash' : ''].join(' ')}>
           {/* Aviso ANTE EM JOGO */}
-          {currentBlindMaximized.showAnte && (
+          {currentBlindMaximized.showAnte && timerState.status !== 'interval' && (
             <div className="animate-pulse rounded-3xl bg-gradient-to-r from-red-600 via-yellow-600 to-red-600 p-8 w-full max-w-[85rem] border-4 border-red-400 shadow-[0_0_50px_rgba(220,38,38,0.6)]">
               <p className="text-8xl font-black text-white drop-shadow-lg">⚠️ ANTE EM JOGO! ⚠️</p>
             </div>
           )}
 
           {/* Blinds Gigante */}
+          {timerState.status !== 'interval' && (
           <div className="flex items-center justify-between gap-16 rounded-2xl bg-[#1b3e52]/70 p-12 w-full max-w-[85rem]">
             <div className="text-center flex-1">
               <p className="text-4xl text-slate-300 font-semibold mb-4">Small Blind</p>
@@ -833,6 +845,7 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
               <p className="text-[14rem] leading-none font-black text-emerald-400 drop-shadow-lg">{currentBlindMaximized.bigBlind}</p>
             </div>
           </div>
+          )}
 
           {/* Timer Gigante */}
           <div className={[
@@ -852,10 +865,8 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
                 <p className="text-3xl text-yellow-400 mt-4">de {timerConfig.intervalExtraMinutes} min disponíveis</p>
               </>
             ) : timerState.lastBlindMode ? (
-              <>
-                <p className="text-7xl font-black text-yellow-300 animate-pulse mb-6">⚠️ ÚLTIMAS 3 MÃOS ⚠️</p>
-                <p className="text-9xl tabular-nums text-slate-100">{timerDisplayMaximized}</p>
-              </>            ) : showRebuyCutoff ? (
+              <p className="text-7xl font-black text-yellow-300 animate-pulse">⚠️ ÚLTIMAS 3 MÃOS ⚠️</p>
+            ) : showRebuyCutoff ? (
               <>
                 <p className="text-[5rem] font-black text-orange-300 animate-pulse mb-4">🚫 FIM DO PERÍODO DE REBUY!</p>
                 <p className="text-9xl tabular-nums text-slate-100">{timerDisplayMaximized}</p>

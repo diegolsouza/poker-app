@@ -19,6 +19,30 @@
   animation: blind-flash 0.5s ease-in-out 6;
 }
 
+@keyframes rebuy-flash {
+  0%, 49.9% {
+    color: #ef4444;
+    text-shadow: 0 0 80px rgba(239, 68, 68, 1), 0 0 160px rgba(239, 68, 68, 0.6);
+  }
+  50%, 100% {
+    color: #eab308;
+    text-shadow: 0 0 80px rgba(234, 179, 8, 1), 0 0 160px rgba(234, 179, 8, 0.6);
+  }
+}
+
+@keyframes rebuy-bg-flash {
+  0%, 49.9% { background-color: #0d0000; }
+  50%, 100% { background-color: #0d0800; }
+}
+
+.animate-rebuy-flash {
+  animation: rebuy-flash 0.5s steps(1) infinite;
+}
+
+.animate-rebuy-bg {
+  animation: rebuy-bg-flash 0.5s steps(1) infinite;
+}
+
 html {
 	background: #061019;
 }
