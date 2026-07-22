@@ -712,17 +712,17 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
-              onClick={() => void handleAddSeconds(30)}
+              onClick={() => void handleAddSeconds(55)}
               className="rounded-lg px-4 py-2 text-sm font-semibold bg-violet-600 text-violet-50 hover:bg-violet-500 transition"
             >
-              ⏱️ +30s
+              ⏱️ +55s
             </button>
             <button
               type="button"
-              onClick={() => void handleAddSeconds(-30)}
+              onClick={() => void handleAddSeconds(-55)}
               className="rounded-lg px-4 py-2 text-sm font-semibold bg-violet-600 text-violet-50 hover:bg-violet-500 transition"
             >
-              ⏱️ -30s
+              ⏱️ -55s
             </button>
           </div>
         </div>
