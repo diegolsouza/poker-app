@@ -3,11 +3,21 @@ import supabase from '../supabaseClient';
 import { isAdminAuthenticated } from '../utils/adminAuth';
 import logo from '../assets/logo.png';
 
+type EtapaStatus = 'pendente' | 'em_andamento' | 'finalizada';
+
 type Etapa = {
   id: number;
   codigo_etapa: string;
   data_etapa: string;
+  status: EtapaStatus;
 };
+
+function toEtapaStatus(value: unknown): EtapaStatus {
+  if (value === 'em_andamento' || value === 'finalizada') {
+    return value as EtapaStatus;
+  }
+  return 'pendente';
+}
 
 type Jogador = {
   id: number;
@@ -177,7 +187,7 @@ export default function PreJogo() {
           .select('id, nome')
           .eq('ativo', true)
           .order('nome', { ascending: true }),
-        supabase.from('etapas').select('id, codigo_etapa, data_etapa').order('data_etapa', { ascending: false }),
+        supabase.from('etapas').select('id, codigo_etapa, data_etapa, status').order('data_etapa', { ascending: false }),
       ]);
 
       if (jogadoresResult.error) {
@@ -193,7 +203,12 @@ export default function PreJogo() {
       }
 
       const jogadoresData = (jogadoresResult.data ?? []) as Jogador[];
-      const etapasData = (etapasResult.data ?? []) as Etapa[];
+      const etapasData = (etapasResult.data ?? []).map((row: any) => ({
+        id: Number(row.id),
+        codigo_etapa: String(row.codigo_etapa),
+        data_etapa: String(row.data_etapa),
+        status: toEtapaStatus(row.status),
+      })) as Etapa[];
       setJogadores(jogadoresData);
       setEtapas(etapasData);
       setSyncWarning(null);
@@ -826,15 +841,17 @@ export default function PreJogo() {
             <select
               value={etapaId}
               onChange={(event) => setEtapaId(event.target.value)}
-              disabled={isLoading || etapas.length === 0}
+              disabled={isLoading || etapas.filter((e) => e.status === 'pendente').length === 0}
               className="mt-1 h-10 w-full rounded-lg border border-[#244357] bg-[#0b1a25] px-3 text-sm text-slate-100 outline-none transition focus:border-[#ff5e00]"
             >
-              {etapas.length === 0 ? <option value="">Sem etapas</option> : null}
-              {etapas.map((etapa) => (
-                <option key={etapa.id} value={etapa.id}>
-                  {etapa.codigo_etapa} - {new Date(etapa.data_etapa).toLocaleDateString('pt-BR')}
-                </option>
-              ))}
+              {etapas.filter((e) => e.status === 'pendente').length === 0 ? <option value="">Sem etapas pendentes</option> : <option value="">Selecione uma etapa</option>}
+              {etapas
+                .filter((e) => e.status === 'pendente')
+                .map((etapa) => (
+                  <option key={etapa.id} value={etapa.id}>
+                    {etapa.codigo_etapa} - {new Date(etapa.data_etapa).toLocaleDateString('pt-BR')}
+                  </option>
+                ))}
             </select>
           </label>
         </header>
