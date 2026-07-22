@@ -55,6 +55,7 @@ const DEFAULT_TIMER_CONFIG: TimerConfig = {
 };
 
 const LAST_BLIND_DURATION_SECONDS = 15 * 60; // 15 minutos
+const REBUY_CUTOFF_LEVEL = 6; // índice do nível 7 (base 0) - último nível com rebuy
 
 // ===================== UTILITÁRIOS =====================
 function formatTime(seconds: number): string {
@@ -328,8 +329,8 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
     if (timerState.status === 'interval') {
       const baseSeconds = timerConfig.intervalMinutes * 60;
       const maxExtraSeconds = timerConfig.intervalExtraMinutes * 60;
-      const totalIntervalSeconds = baseSeconds + maxExtraSeconds;
-      const remaining = Math.max(0, totalIntervalSeconds - elapsed);
+      // Mostra apenas o tempo base no countdown; o acréscimo tem display próprio via isInExtraTime
+      const remaining = Math.max(0, baseSeconds - elapsed);
       const extraConsumed = Math.min(maxExtraSeconds, Math.max(0, elapsed - baseSeconds));
       return {
         remainingSeconds: remaining,
@@ -419,7 +420,8 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
     const extraConsumed = Math.min(maxExtraSeconds, Math.max(0, intervalElapsed - baseSeconds));
 
     // Reduzir o elapsed do blind atual pelo acréscimo consumido (dando mais tempo restante)
-    const newPausedElapsed = Math.max(0, timerState.pausedElapsedSeconds - extraConsumed);
+    // Permite valor negativo: significa que o blind terá mais tempo que a duração configurada
+    const newPausedElapsed = timerState.pausedElapsedSeconds - extraConsumed;
 
     const newState: TimerState = {
       ...timerState,
@@ -553,12 +555,12 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
       autoEndedIntervalRef.current = false;
       return;
     }
-    if (canControl && remainingSeconds <= 0 && !autoEndedIntervalRef.current) {
+    if (canControl && isInExtraTime && intervalExtraConsumedSeconds >= timerConfig.intervalExtraMinutes * 60 && !autoEndedIntervalRef.current) {
       autoEndedIntervalRef.current = true;
       void handleEndInterval();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [remainingSeconds, timerState.status, canControl]);
+  }, [intervalExtraConsumedSeconds, isInExtraTime, timerState.status, canControl]);
 
   // ============ FLASH AO MUDAR DE BLIND ============
   useEffect(() => {
@@ -577,6 +579,12 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
 
   // ============ RENDERIZAÇÃO ============
   const timerDisplay = formatTime(remainingSeconds);
+  const showRebuyCutoff =
+    timerState.blindLevel === REBUY_CUTOFF_LEVEL &&
+    timerState.status === 'running' &&
+    !timerState.lastBlindMode &&
+    remainingSeconds <= 10 &&
+    remainingSeconds > 0;
 
   // Ocultar timer nas páginas públicas até iniciar
   if (!showTimer) {
@@ -627,7 +635,12 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
           <p className="text-lg font-bold text-yellow-200">⚠️ ÚLTIMAS 3 MÃOS</p>
         </div>
       )}
-
+      {/* Aviso fim do período de rebuy */}
+      {showRebuyCutoff && (
+        <div className="rounded-lg border-2 border-orange-400 bg-orange-500/20 p-3 text-center animate-pulse">
+          <p className="text-base font-black text-orange-200 uppercase tracking-wide">🚫 FIM DO PERÍODO DE REBUY!</p>
+        </div>
+      )}
       {/* Blinds */}
       <div className="flex items-center justify-between rounded-lg bg-[#1b3e52]/50 p-6">
         <div className="text-center">
@@ -824,10 +837,13 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
               </>
             ) : timerState.lastBlindMode ? (
               <>
-                <p className="text-7xl font-black text-yellow-300 animate-pulse mb-6">⚠️ ÚCTIMAS 3 MÃOS ⚠️</p>
+                <p className="text-7xl font-black text-yellow-300 animate-pulse mb-6">⚠️ ÚLTIMAS 3 MÃOS ⚠️</p>
                 <p className="text-9xl tabular-nums text-slate-100">{timerDisplayMaximized}</p>
-              </>
-            ) : (
+              </>            ) : showRebuyCutoff ? (
+              <>
+                <p className="text-[5rem] font-black text-orange-300 animate-pulse mb-4">🚫 FIM DO PERÍODO DE REBUY!</p>
+                <p className="text-9xl tabular-nums text-slate-100">{timerDisplayMaximized}</p>
+              </>            ) : (
               <p className="text-9xl tabular-nums text-slate-100">{timerDisplayMaximized}</p>
             )}
           </div>
