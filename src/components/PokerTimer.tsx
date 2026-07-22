@@ -105,10 +105,6 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
   const prevBlindLevelRef = useRef<number>(-1);
   const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isFlashing, setIsFlashing] = useState(false);
-  const [isPauseDragging, setIsPauseDragging] = useState(false);
-  const pauseDragRef = useRef<{ startX: number; startY: number } | null>(null);
-  const [isIntervalDragging, setIsIntervalDragging] = useState(false);
-  const intervalDragRef = useRef<{ startX: number; startY: number } | null>(null);
 
   // Gerar blind levels dinamicamente baseado na configuração carregada
   const blindLevels: BlindLevel[] = useMemo(() => {
@@ -581,44 +577,17 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
     };
   }, [timerState.blindLevel, isMaximized]);
 
-  // ============ PAUSE DRAG HANDLERS ============
-  const handlePauseMouseDown = (e: React.MouseEvent<HTMLButtonElement>) => {
-    setIsPauseDragging(true);
-    pauseDragRef.current = { startX: e.clientX, startY: e.clientY };
-  };
-
-  const handlePauseMouseUp = (e: React.MouseEvent<HTMLButtonElement>) => {
-    if (pauseDragRef.current) {
-      const distance = Math.sqrt(
-        Math.pow(e.clientX - pauseDragRef.current.startX, 2) +
-        Math.pow(e.clientY - pauseDragRef.current.startY, 2)
-      );
-      if (distance >= 50) {
-        void handlePause();
-      }
+  // ============ CONFIRMATION HANDLERS ============
+  const handlePauseWithConfirm = () => {
+    if (window.confirm('Tem certeza que deseja pausar?')) {
+      void handlePause();
     }
-    setIsPauseDragging(false);
-    pauseDragRef.current = null;
   };
 
-  // ============ INTERVAL DRAG HANDLERS ============
-  const handleIntervalMouseDown = (e: React.MouseEvent<HTMLButtonElement>) => {
-    setIsIntervalDragging(true);
-    intervalDragRef.current = { startX: e.clientX, startY: e.clientY };
-  };
-
-  const handleIntervalMouseUp = (e: React.MouseEvent<HTMLButtonElement>) => {
-    if (intervalDragRef.current) {
-      const distance = Math.sqrt(
-        Math.pow(e.clientX - intervalDragRef.current.startX, 2) +
-        Math.pow(e.clientY - intervalDragRef.current.startY, 2)
-      );
-      if (distance >= 50) {
-        void handleInterval();
-      }
+  const handleIntervalWithConfirm = () => {
+    if (window.confirm('Tem certeza que deseja iniciar o intervalo?')) {
+      void handleInterval();
     }
-    setIsIntervalDragging(false);
-    pauseDragRef.current = null;
   };
 
   // ============ RENDERIZAÇÃO ============
@@ -745,12 +714,10 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
 
             <button
               type="button"
-              onMouseDown={handlePauseMouseDown}
-              onMouseUp={handlePauseMouseUp}
+              onClick={handlePauseWithConfirm}
               disabled={timerState.status === 'stopped' || timerState.status === 'interval'}
               className={[
-                'rounded-lg px-4 py-2 text-sm font-semibold transition select-none',
-                isPauseDragging ? 'cursor-grabbing' : 'cursor-grab',
+                'rounded-lg px-4 py-2 text-sm font-semibold transition',
                 timerState.status === 'stopped' || timerState.status === 'interval'
                   ? 'bg-slate-600/40 text-slate-400 cursor-not-allowed'
                   : timerState.status === 'running'
@@ -763,12 +730,10 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
 
             <button
               type="button"
-              onMouseDown={handleIntervalMouseDown}
-              onMouseUp={handleIntervalMouseUp}
+              onClick={handleIntervalWithConfirm}
               disabled={timerState.status !== 'running'}
               className={[
-                'rounded-lg px-4 py-2 text-sm font-semibold transition select-none',
-                isIntervalDragging ? 'cursor-grabbing' : 'cursor-grab',
+                'rounded-lg px-4 py-2 text-sm font-semibold transition',
                 timerState.status !== 'running'
                   ? 'bg-slate-600/40 text-slate-400 cursor-not-allowed'
                   : 'bg-orange-500 text-orange-950 hover:bg-orange-400',
@@ -938,12 +903,10 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
 
               <button
                 type="button"
-                onMouseDown={handlePauseMouseDown}
-                onMouseUp={handlePauseMouseUp}
+                onClick={handlePauseWithConfirm}
                 disabled={timerState.status === 'stopped' || timerState.status === 'interval'}
                 className={[
-                  'rounded-xl px-6 py-4 text-lg font-semibold transition select-none',
-                  isPauseDragging ? 'cursor-grabbing' : 'cursor-grab',
+                  'rounded-xl px-6 py-4 text-lg font-semibold transition',
                   timerState.status === 'stopped' || timerState.status === 'interval'
                     ? 'bg-slate-600/40 text-slate-400 cursor-not-allowed'
                     : timerState.status === 'running'
@@ -956,12 +919,10 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
 
               <button
                 type="button"
-                onMouseDown={handleIntervalMouseDown}
-                onMouseUp={handleIntervalMouseUp}
+                onClick={handleIntervalWithConfirm}
                 disabled={timerState.status !== 'running'}
                 className={[
-                  'rounded-xl px-6 py-4 text-lg font-semibold transition select-none',
-                  isIntervalDragging ? 'cursor-grabbing' : 'cursor-grab',
+                  'rounded-xl px-6 py-4 text-lg font-semibold transition',
                   timerState.status !== 'running'
                     ? 'bg-slate-600/40 text-slate-400 cursor-not-allowed'
                     : 'bg-orange-500 text-orange-950 hover:bg-orange-400',
