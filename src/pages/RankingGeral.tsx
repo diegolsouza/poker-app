@@ -356,7 +356,7 @@ export default function RankingGeral() {
       <section className="rounded-2xl border border-slate-700/60 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 p-5 shadow-[0_10px_30px_rgba(2,6,23,0.35)]">
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Classificação</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#ff8d4d]">Classificação</p>
             <h1 className="mt-1 text-2xl font-bold text-white">Ranking Geral</h1>
             <p className="mt-1 hidden text-sm text-slate-300 md:block">Pontuação acumulada por temporada com desempate por colocações.</p>
           </div>

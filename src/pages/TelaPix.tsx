@@ -495,6 +495,7 @@ export default function TelaPix() {
       <section className="mx-auto w-full max-w-[1700px] space-y-6">
         <header className="flex flex-col gap-3 rounded-3xl border border-[#244357] bg-[#081723]/92 p-5 shadow-[0_18px_45px_rgba(3,8,14,0.42)] backdrop-blur sm:flex-row sm:items-end sm:justify-between">
           <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#ff8d4d]">Acerto por Etapa</p>
             <h1 className="text-2xl font-bold text-slate-50">Financeiro</h1>
             <p className="mt-1 hidden text-sm text-slate-300 sm:block">
               Visualize os acertos da rodada com base nos registros da etapa selecionada.

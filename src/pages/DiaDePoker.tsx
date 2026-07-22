@@ -1551,9 +1551,9 @@ export default function DiaDePoker() {
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#ff8d4d]">Painel em tempo real</p>
             <h1 className="mt-2 text-2xl font-semibold text-slate-100 sm:text-3xl">Dia de Poker</h1>
-            <p className="mt-2 text-sm text-slate-300">
+            {/* <p className="mt-2 text-sm text-slate-300">
               Controle de etapa, operação dos mesários e registro incremental de rebuys/add-on por voz e manual.
-            </p>
+            </p> */}
           </div>
           {!canViewAdminTab && selectedEtapaId && (
             <button
