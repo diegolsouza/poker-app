@@ -107,6 +107,8 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
   const [isFlashing, setIsFlashing] = useState(false);
   const [isPauseDragging, setIsPauseDragging] = useState(false);
   const pauseDragRef = useRef<{ startX: number; startY: number } | null>(null);
+  const [isIntervalDragging, setIsIntervalDragging] = useState(false);
+  const intervalDragRef = useRef<{ startX: number; startY: number } | null>(null);
 
   // Gerar blind levels dinamicamente baseado na configuração carregada
   const blindLevels: BlindLevel[] = useMemo(() => {
@@ -591,11 +593,31 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
         Math.pow(e.clientX - pauseDragRef.current.startX, 2) +
         Math.pow(e.clientY - pauseDragRef.current.startY, 2)
       );
-      if (distance < 10) {
+      if (distance >= 50) {
         void handlePause();
       }
     }
     setIsPauseDragging(false);
+    pauseDragRef.current = null;
+  };
+
+  // ============ INTERVAL DRAG HANDLERS ============
+  const handleIntervalMouseDown = (e: React.MouseEvent<HTMLButtonElement>) => {
+    setIsIntervalDragging(true);
+    intervalDragRef.current = { startX: e.clientX, startY: e.clientY };
+  };
+
+  const handleIntervalMouseUp = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (intervalDragRef.current) {
+      const distance = Math.sqrt(
+        Math.pow(e.clientX - intervalDragRef.current.startX, 2) +
+        Math.pow(e.clientY - intervalDragRef.current.startY, 2)
+      );
+      if (distance >= 50) {
+        void handleInterval();
+      }
+    }
+    setIsIntervalDragging(false);
     pauseDragRef.current = null;
   };
 
@@ -626,15 +648,6 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
             </span>
           )}
         </div>
-        {canControl && !isMaximized && (
-          <button
-            type="button"
-            onClick={() => setIsMaximized(true)}
-            className="rounded-lg bg-[#ff5e00]/20 px-3 py-1 text-xs font-semibold text-[#ff8d4d] hover:bg-[#ff5e00]/30"
-          >
-            ⛶ Maximizar
-          </button>
-        )}
       </div>
 
       {/* Status do intervalo */}
@@ -719,10 +732,10 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
             <button
               type="button"
               onClick={handleStart}
-              disabled={timerState.status === 'running'}
+              disabled={timerState.status !== 'stopped'}
               className={[
                 'rounded-lg px-4 py-2 text-sm font-semibold transition',
-                timerState.status === 'running'
+                timerState.status !== 'stopped'
                   ? 'bg-slate-600/40 text-slate-400 cursor-not-allowed'
                   : 'bg-emerald-500 text-emerald-950 hover:bg-emerald-400',
               ].join(' ')}
@@ -750,10 +763,12 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
 
             <button
               type="button"
-              onClick={handleInterval}
+              onMouseDown={handleIntervalMouseDown}
+              onMouseUp={handleIntervalMouseUp}
               disabled={timerState.status !== 'running'}
               className={[
-                'rounded-lg px-4 py-2 text-sm font-semibold transition',
+                'rounded-lg px-4 py-2 text-sm font-semibold transition select-none',
+                isIntervalDragging ? 'cursor-grabbing' : 'cursor-grab',
                 timerState.status !== 'running'
                   ? 'bg-slate-600/40 text-slate-400 cursor-not-allowed'
                   : 'bg-orange-500 text-orange-950 hover:bg-orange-400',
@@ -910,10 +925,10 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
               <button
                 type="button"
                 onClick={handleStart}
-                disabled={timerState.status === 'running'}
+                disabled={timerState.status !== 'stopped'}
                 className={[
                   'rounded-xl px-6 py-4 text-lg font-semibold transition',
-                  timerState.status === 'running'
+                  timerState.status !== 'stopped'
                     ? 'bg-slate-600/40 text-slate-400 cursor-not-allowed'
                     : 'bg-emerald-500 text-emerald-950 hover:bg-emerald-400',
                 ].join(' ')}
@@ -941,10 +956,12 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
 
               <button
                 type="button"
-                onClick={handleInterval}
+                onMouseDown={handleIntervalMouseDown}
+                onMouseUp={handleIntervalMouseUp}
                 disabled={timerState.status !== 'running'}
                 className={[
-                  'rounded-xl px-6 py-4 text-lg font-semibold transition',
+                  'rounded-xl px-6 py-4 text-lg font-semibold transition select-none',
+                  isIntervalDragging ? 'cursor-grabbing' : 'cursor-grab',
                   timerState.status !== 'running'
                     ? 'bg-slate-600/40 text-slate-400 cursor-not-allowed'
                     : 'bg-orange-500 text-orange-950 hover:bg-orange-400',
