@@ -105,6 +105,8 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
   const prevBlindLevelRef = useRef<number>(-1);
   const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isFlashing, setIsFlashing] = useState(false);
+  const [isPauseDragging, setIsPauseDragging] = useState(false);
+  const pauseDragRef = useRef<{ startX: number; startY: number } | null>(null);
 
   // Gerar blind levels dinamicamente baseado na configuração carregada
   const blindLevels: BlindLevel[] = useMemo(() => {
@@ -577,6 +579,26 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
     };
   }, [timerState.blindLevel, isMaximized]);
 
+  // ============ PAUSE DRAG HANDLERS ============
+  const handlePauseMouseDown = (e: React.MouseEvent<HTMLButtonElement>) => {
+    setIsPauseDragging(true);
+    pauseDragRef.current = { startX: e.clientX, startY: e.clientY };
+  };
+
+  const handlePauseMouseUp = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (pauseDragRef.current) {
+      const distance = Math.sqrt(
+        Math.pow(e.clientX - pauseDragRef.current.startX, 2) +
+        Math.pow(e.clientY - pauseDragRef.current.startY, 2)
+      );
+      if (distance < 10) {
+        void handlePause();
+      }
+    }
+    setIsPauseDragging(false);
+    pauseDragRef.current = null;
+  };
+
   // ============ RENDERIZAÇÃO ============
   const timerDisplay = formatTime(remainingSeconds);
   const showRebuyCutoff =
@@ -710,10 +732,12 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
 
             <button
               type="button"
-              onClick={handlePause}
+              onMouseDown={handlePauseMouseDown}
+              onMouseUp={handlePauseMouseUp}
               disabled={timerState.status === 'stopped' || timerState.status === 'interval'}
               className={[
-                'rounded-lg px-4 py-2 text-sm font-semibold transition',
+                'rounded-lg px-4 py-2 text-sm font-semibold transition select-none',
+                isPauseDragging ? 'cursor-grabbing' : 'cursor-grab',
                 timerState.status === 'stopped' || timerState.status === 'interval'
                   ? 'bg-slate-600/40 text-slate-400 cursor-not-allowed'
                   : timerState.status === 'running'
@@ -738,6 +762,7 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
               🔴 Intervalo
             </button>
 
+            {isAdmin && (
             <button
               type="button"
               onClick={handleReset}
@@ -751,6 +776,7 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
             >
               🔄 Reset
             </button>
+            )}
           </div>
 
           {/* Controles secundários */}
@@ -764,7 +790,7 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
             </button>
           )}
 
-          {!timerState.lastBlindMode && timerState.blindLevel < blindLevels.length - 1 && timerState.status === 'running' && (
+          {!timerState.lastBlindMode && timerState.blindLevel < blindLevels.length - 1 && timerState.status === 'running' && isAdmin && (
             <button
               type="button"
               onClick={handleNextBlind}
@@ -774,6 +800,7 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
             </button>
           )}
 
+          {isAdmin && (
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
@@ -790,6 +817,7 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
               ⏱️ -55s
             </button>
           </div>
+          )}
         </div>
       )}
     </div>
@@ -895,10 +923,12 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
 
               <button
                 type="button"
-                onClick={handlePause}
+                onMouseDown={handlePauseMouseDown}
+                onMouseUp={handlePauseMouseUp}
                 disabled={timerState.status === 'stopped' || timerState.status === 'interval'}
                 className={[
-                  'rounded-xl px-6 py-4 text-lg font-semibold transition',
+                  'rounded-xl px-6 py-4 text-lg font-semibold transition select-none',
+                  isPauseDragging ? 'cursor-grabbing' : 'cursor-grab',
                   timerState.status === 'stopped' || timerState.status === 'interval'
                     ? 'bg-slate-600/40 text-slate-400 cursor-not-allowed'
                     : timerState.status === 'running'
@@ -923,6 +953,7 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
                 🔴 Intervalo
               </button>
 
+              {isAdmin && (
               <button
                 type="button"
                 onClick={handleReset}
@@ -936,7 +967,9 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
               >
                 🔄 Reset
               </button>
+              )}
             </div>
+            {isAdmin && (
             <div className="grid grid-cols-2 gap-4 w-full max-w-[85rem]">
               <button
                 type="button"
@@ -953,6 +986,7 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
                 ⏱️ -30s
               </button>
             </div>
+            )}
             </>
           )}
         </div>
