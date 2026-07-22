@@ -100,6 +100,7 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
   const lastSyncRef = useRef<number>(0);
   const serverTimeOffsetRef = useRef<number>(0);
   const autoAdvancedForLevelRef = useRef<number | null>(null);
+  const autoEndedIntervalRef = useRef<boolean>(false);
   const prevBlindLevelRef = useRef<number>(-1);
   const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isFlashing, setIsFlashing] = useState(false);
@@ -321,23 +322,31 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
 
   const currentBlind = useMemo(() => blindLevels[timerState.blindLevel] || blindLevels[0], [timerState.blindLevel, blindLevels]);
 
-  const { remainingSeconds, isLastMinute } = useMemo(() => {
+  const { remainingSeconds, isLastMinute, intervalExtraConsumedSeconds, isInExtraTime } = useMemo(() => {
     const elapsed = getElapsedSeconds();
 
     if (timerState.status === 'interval') {
-      const totalIntervalSeconds = (timerConfig.intervalMinutes + timerState.intervalExtraMinutes) * 60;
+      const baseSeconds = timerConfig.intervalMinutes * 60;
+      const maxExtraSeconds = timerConfig.intervalExtraMinutes * 60;
+      const totalIntervalSeconds = baseSeconds + maxExtraSeconds;
       const remaining = Math.max(0, totalIntervalSeconds - elapsed);
-      return { remainingSeconds: remaining, isLastMinute: remaining < 60 };
+      const extraConsumed = Math.min(maxExtraSeconds, Math.max(0, elapsed - baseSeconds));
+      return {
+        remainingSeconds: remaining,
+        isLastMinute: remaining < 60,
+        intervalExtraConsumedSeconds: extraConsumed,
+        isInExtraTime: elapsed > baseSeconds,
+      };
     }
 
     if (timerState.lastBlindMode) {
       const remaining = Math.max(0, LAST_BLIND_DURATION_SECONDS - elapsed);
-      return { remainingSeconds: remaining, isLastMinute: true };
+      return { remainingSeconds: remaining, isLastMinute: true, intervalExtraConsumedSeconds: 0, isInExtraTime: false };
     }
 
     const levelDurationSeconds = currentBlind.minutes * 60;
     const remaining = Math.max(0, levelDurationSeconds - elapsed);
-    return { remainingSeconds: remaining, isLastMinute: remaining < 60 };
+    return { remainingSeconds: remaining, isLastMinute: remaining < 60, intervalExtraConsumedSeconds: 0, isInExtraTime: false };
   }, [timerState, currentBlind, getElapsedSeconds, timerConfig]);
 
   // ============ CONTROLES ============
@@ -401,13 +410,23 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
   const handleEndInterval = async () => {
     if (!canControl) return;
 
-    // Retorna ao mesmo blind de onde parou antes do intervalo
+    // Calcular acréscimo consumido durante o intervalo
+    const intervalElapsed = timerState.intervalStartedAt
+      ? Math.floor((serverNow() - timerState.intervalStartedAt) / 1000)
+      : 0;
+    const baseSeconds = timerConfig.intervalMinutes * 60;
+    const maxExtraSeconds = timerConfig.intervalExtraMinutes * 60;
+    const extraConsumed = Math.min(maxExtraSeconds, Math.max(0, intervalElapsed - baseSeconds));
+
+    // Reduzir o elapsed do blind atual pelo acréscimo consumido (dando mais tempo restante)
+    const newPausedElapsed = Math.max(0, timerState.pausedElapsedSeconds - extraConsumed);
+
     const newState: TimerState = {
       ...timerState,
       status: 'running',
       startedAt: serverNow(),
       pausedAt: null,
-      // pausedElapsedSeconds: mantido do spread (salvo ao entrar no intervalo)
+      pausedElapsedSeconds: newPausedElapsed,
       intervalStartedAt: null,
       intervalExtraMinutes: 0,
     };
@@ -470,6 +489,8 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
     if (!canControl) return;
 
     let nextBlindLevel = timerState.blindLevel + 1;
+    // Se já estamos no último nível e tentamos avançar, entrar em modo últimas 3 mãos
+    const enterLastBlindMode = nextBlindLevel >= blindLevels.length;
 
     if (nextBlindLevel >= blindLevels.length) {
       nextBlindLevel = blindLevels.length - 1;
@@ -482,8 +503,8 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
       pausedElapsedSeconds: 0,
       intervalStartedAt: null,
       intervalExtraMinutes: 0,
-      lastBlindMode: false,
-      lastBlindStartedAt: null,
+      lastBlindMode: enterLastBlindMode,
+      lastBlindStartedAt: enterLastBlindMode ? serverNow() : null,
     };
 
     if (timerState.status === 'stopped') {
@@ -525,6 +546,19 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [remainingSeconds, timerState.status, timerState.blindLevel, timerState.lastBlindMode, canControl]);
+
+  // ============ FIM AUTOMÁTICO DO INTERVALO ============
+  useEffect(() => {
+    if (timerState.status !== 'interval') {
+      autoEndedIntervalRef.current = false;
+      return;
+    }
+    if (canControl && remainingSeconds <= 0 && !autoEndedIntervalRef.current) {
+      autoEndedIntervalRef.current = true;
+      void handleEndInterval();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [remainingSeconds, timerState.status, canControl]);
 
   // ============ FLASH AO MUDAR DE BLIND ============
   useEffect(() => {
@@ -574,10 +608,15 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
 
       {/* Status do intervalo */}
       {timerState.status === 'interval' && (
-        <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-center">
-          <p className="text-sm font-semibold text-red-200">INTERVALO</p>
-          {timerState.intervalExtraMinutes > 0 && (
-            <p className="text-xs text-red-300 mt-1">+{timerState.intervalExtraMinutes} min(s) de acréscimo</p>
+        <div className={['rounded-lg border p-3 text-center', isInExtraTime ? 'border-yellow-500/60 bg-yellow-500/15 animate-pulse' : 'border-red-500/40 bg-red-500/10'].join(' ')}>
+          {isInExtraTime ? (
+            <>
+              <p className="text-sm font-bold text-yellow-300">⏰ ACRÉSCIMO EM ANDAMENTO</p>
+              <p className="text-2xl font-black text-yellow-200 mt-1">{formatTime(intervalExtraConsumedSeconds)}</p>
+              <p className="text-xs text-yellow-400 mt-1">de {timerConfig.intervalExtraMinutes} min disponíveis</p>
+            </>
+          ) : (
+            <p className="text-sm font-semibold text-red-200">🔴 INTERVALO</p>
           )}
         </div>
       )}
@@ -769,13 +808,28 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
           {/* Timer Gigante */}
           <div className={[
             'rounded-3xl p-16 text-center font-mono font-bold w-full max-w-[85rem]',
-            timerState.status === 'interval'
-              ? 'bg-red-500/30 border-4 border-red-500/50'
-              : isLastMinute
-                ? 'bg-yellow-500/30 border-4 border-yellow-500/50'
-                : 'bg-[#1b3e52]/70 border-4 border-[#2d4659]',
+            isInExtraTime
+              ? 'bg-yellow-500/20 border-4 border-yellow-500/50 animate-pulse'
+              : timerState.status === 'interval'
+                ? 'bg-red-500/30 border-4 border-red-500/50'
+                : isLastMinute
+                  ? 'bg-yellow-500/30 border-4 border-yellow-500/50'
+                  : 'bg-[#1b3e52]/70 border-4 border-[#2d4659]',
           ].join(' ')}>
-            <p className="text-9xl tabular-nums text-slate-100">{timerDisplayMaximized}</p>
+            {isInExtraTime ? (
+              <>
+                <p className="text-5xl font-bold text-yellow-300 mb-4">⏰ ACRÉSCIMO</p>
+                <p className="text-9xl tabular-nums text-yellow-200">{formatTime(intervalExtraConsumedSeconds)}</p>
+                <p className="text-3xl text-yellow-400 mt-4">de {timerConfig.intervalExtraMinutes} min disponíveis</p>
+              </>
+            ) : timerState.lastBlindMode ? (
+              <>
+                <p className="text-7xl font-black text-yellow-300 animate-pulse mb-6">⚠️ ÚCTIMAS 3 MÃOS ⚠️</p>
+                <p className="text-9xl tabular-nums text-slate-100">{timerDisplayMaximized}</p>
+              </>
+            ) : (
+              <p className="text-9xl tabular-nums text-slate-100">{timerDisplayMaximized}</p>
+            )}
           </div>
 
           {/* Controles em modo maximizado */}
