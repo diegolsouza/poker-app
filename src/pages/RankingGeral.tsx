@@ -453,19 +453,19 @@ export default function RankingGeral() {
         </div>
 
         <div className="hidden overflow-x-auto md:block">
-          <table className="min-w-[1120px] border-collapse text-[11px] leading-tight">
+          <table className="min-w-[940px] border-collapse text-[13px] leading-tight">
             <thead className="bg-[#0f2230] text-slate-200">
               <tr>
-                <th className="w-14 px-1 py-2 text-left font-semibold">Posição</th>
-                <th className="w-14 px-1 py-2 text-center font-semibold">Mov.</th>
-                <th className="px-1 py-2 text-left font-semibold">Nome</th>
-                <th className="w-20 px-2 py-2 text-right font-semibold">Pontos</th>
-                <th className="w-16 px-2 py-2 text-right font-semibold">Part.</th>
-                <th className="w-16 px-2 py-2 text-right font-semibold">Pódios</th>
-                <th className="w-16 px-2 py-2 text-right font-semibold">M. Mão</th>
-                <th className="w-16 px-2 py-2 text-right font-semibold">Rebuys</th>
+                <th className="w-12 px-0.5 py-2 text-left text-[14px] font-semibold">Posição</th>
+                <th className="w-12 px-0.5 py-2 text-center text-[14px] font-semibold">Mov.</th>
+                <th className="w-40 px-0.5 py-2 text-left text-[14px] font-semibold">Nome</th>
+                <th className="w-16 px-1 py-2 text-right text-[14px] font-semibold">Pontos</th>
+                <th className="w-12 px-1 py-2 text-right font-semibold">Part.</th>
+                <th className="w-12 px-1 py-2 text-right font-semibold">Pódios</th>
+                <th className="w-12 px-1 py-2 text-right font-semibold">M. Mão</th>
+                <th className="w-12 px-1 py-2 text-right font-semibold">Rebuys</th>
                 {POSITION_KEYS.map((posicao) => (
-                  <th key={posicao} className="w-10 px-1 py-2 text-center font-semibold whitespace-nowrap">
+                  <th key={posicao} className="w-8 px-0.5 py-2 text-center font-semibold whitespace-nowrap">
                     {formatOrdinal(posicao)}
                   </th>
                 ))}
@@ -482,45 +482,45 @@ export default function RankingGeral() {
               ) : (
                 ranking.map((row, index) => (
                   <tr key={row.jogadorId} className={`border-t border-[#1f3b4d] text-slate-200 ${getLinhaDestaqueClass(index)}`}>
-                    <td className="px-1 py-2">
-                      <span className={`inline-flex min-w-8 items-center justify-center rounded-full px-1 py-0.5 text-[11px] font-bold ${getPosicaoBadgeClass(index)}`}>
+                    <td className="px-0.5 py-2 text-[14px]">
+                      <span className={`inline-flex min-w-8 items-center justify-center rounded-full px-1 py-0.5 text-xs font-bold ${getPosicaoBadgeClass(index)}`}>
                         {formatOrdinal(index + 1)}
                       </span>
                     </td>
-                    <td className="px-1 py-2 text-center">
+                    <td className="px-0.5 py-2 text-center text-[14px]">
                       {(() => {
                         const movement = movimentacoesRanking.get(row.jogadorId) ?? { direction: 'same', delta: 0 };
 
                         if (movement.direction === 'up') {
-                          return <span className={`inline-flex items-center gap-1 text-xs font-bold ${getMovementIndicatorClass(movement)}`}>▲ {movement.delta}</span>;
+                          return <span className={`inline-flex items-center gap-1 text-sm font-bold ${getMovementIndicatorClass(movement)}`}>▲ {movement.delta}</span>;
                         }
 
                         if (movement.direction === 'down') {
-                          return <span className={`inline-flex items-center gap-1 text-xs font-bold ${getMovementIndicatorClass(movement)}`}>▼ {movement.delta}</span>;
+                          return <span className={`inline-flex items-center gap-1 text-sm font-bold ${getMovementIndicatorClass(movement)}`}>▼ {movement.delta}</span>;
                         }
 
-                        return <span className={`inline-flex items-center justify-center text-xs font-bold ${getMovementIndicatorClass(movement)}`}>●</span>;
+                        return <span className={`inline-flex items-center justify-center text-sm font-bold ${getMovementIndicatorClass(movement)}`}>●</span>;
                       })()}
                     </td>
-                    <td className="px-1 py-2 font-semibold text-slate-100 whitespace-nowrap">
+                    <td className="w-40 max-w-[10rem] px-0 py-2 text-[14px] font-semibold text-slate-100">
                       <button
                         type="button"
                         onClick={() => handleOpenModal(row.jogadorId, row.nome)}
-                        className="cursor-pointer font-medium text-[#ff9a63] transition hover:text-[#ffb387]"
+                        className="block w-full cursor-pointer truncate text-left font-medium text-[#ff9a63] transition hover:text-[#ffb387]"
                       >
                         {row.nome}
                       </button>
                     </td>
-                    <td className="px-2 py-2 text-right font-bold text-slate-100">{row.pontosTotais}</td>
-                    <td className="px-2 py-2 text-right">{row.participacoes}</td>
-                    <td className="px-2 py-2 text-right">{row.podios}</td>
-                    <td className="px-2 py-2 text-right">{row.melhorMao}</td>
-                    <td className="px-2 py-2 text-right">{row.rebuys}</td>
+                    <td className="px-1 py-2 text-right text-[14px] font-bold text-slate-100">{row.pontosTotais}</td>
+                    <td className="px-1 py-2 text-right">{row.participacoes}</td>
+                    <td className="px-1 py-2 text-right">{row.podios}</td>
+                    <td className="px-1 py-2 text-right">{row.melhorMao}</td>
+                    <td className="px-1 py-2 text-right">{row.rebuys}</td>
                     {POSITION_KEYS.map((posicao) => {
                       const count = row.posicoes[posicao];
 
                       return (
-                        <td key={`${row.jogadorId}-${posicao}`} className="px-0.5 py-2 text-center align-middle">
+                        <td key={`${row.jogadorId}-${posicao}`} className="px-0 py-2 text-center align-middle">
                           <span
                             className={`inline-flex min-w-7 items-center justify-center rounded-md border px-1 py-0.5 text-[10px] font-bold leading-none ${getPositionCountStyle(count)}`}
                           >

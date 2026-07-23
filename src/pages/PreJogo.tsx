@@ -976,7 +976,7 @@ export default function PreJogo() {
                 <button
                   type="button"
                   onClick={handleImprimirFichaMesa}
-                  className="inline-flex h-9 items-center justify-center rounded-lg border border-[#315770] bg-[#102536] px-3 text-xs font-semibold text-slate-200 transition hover:border-[#ff9a63] hover:text-[#ffcfb2] disabled:cursor-not-allowed disabled:opacity-60"
+                  className="hidden h-9 items-center justify-center rounded-lg border border-[#315770] bg-[#102536] px-3 text-xs font-semibold text-slate-200 transition hover:border-[#ff9a63] hover:text-[#ffcfb2] disabled:cursor-not-allowed disabled:opacity-60 md:inline-flex"
                 >
                   Ficha por mesa
                 </button>
