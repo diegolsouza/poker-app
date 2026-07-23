@@ -164,6 +164,10 @@ function buildRankingRows(
       return b.participacoes - a.participacoes;
     }
 
+    if (a.rebuys !== b.rebuys) {
+      return a.rebuys - b.rebuys;
+    }
+
     return a.nome.localeCompare(b.nome, 'pt-BR');
   });
 }
