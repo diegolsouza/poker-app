@@ -23,6 +23,9 @@ const TEMPORADA_POR_JOGADOR = 8;
 const CAIXINHA_POR_JOGADOR = 2;
 const TAXA_NOVO_PARTICIPANTE = 50;
 const PIX_PAGAMENTO = 'pokeruplife@gmail.com';
+const VIDEO_IPHONE_APP = 'https://www.youtube.com/embed/YRbCh5dV66o';
+const VIDEO_PRE_JOGO = 'https://www.youtube.com/embed/98Bce7Mv_t0';
+const VIDEO_DIA_DE_POKER = 'https://www.youtube.com/embed/NoaouyqNrYo';
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat('pt-BR', {
@@ -108,10 +111,10 @@ export default function Regras() {
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(255,94,0,0.08),transparent_24%),linear-gradient(180deg,#061019_0%,#07131d_40%,#081723_100%)] px-4 py-8 sm:px-6 lg:px-8">
       <section className="mx-auto w-full max-w-[1700px] space-y-6">
         <header className="rounded-3xl border border-[#244357] bg-[#081723]/92 p-6 shadow-[0_18px_45px_rgba(3,8,14,0.42)]">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff8d4d]">Regras</p>
-          <h1 className="mt-2 text-3xl font-bold text-slate-100">Regras do Torneio e Operacionais</h1>
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff8d4d]">Guias</p>
+          <h1 className="mt-2 text-3xl font-bold text-slate-100">Guias do Torneio e do Sistema</h1>
           <p className="mt-2 text-sm text-slate-300">
-            Guia público com as regras do torneio e as regras operacionais usadas no sistema.
+            Guia público com as regras do torneio e instruções para usar as telas principais do site.
           </p>
         </header>
 
@@ -123,13 +126,13 @@ export default function Regras() {
 
         <section className="space-y-4 rounded-3xl border border-[#244357] bg-[#081723]/92 p-5 shadow-[0_18px_45px_rgba(3,8,14,0.42)]">
           <header>
-            <h2 className="text-xl font-semibold text-slate-100">Regras Operacionais</h2>
+            <h2 className="text-xl font-semibold text-slate-100">Regras</h2>
             <p className="mt-1 text-sm text-slate-300">
-              Regras de participação, horário e condução da rodada.
+              Regras operacionais, financeiras e critérios de pontuação/premiação aplicados no sistema.
             </p>
           </header>
 
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             <article className="rounded-2xl border border-[#244357] bg-[#0b1a25] p-4">
               <h3 className="text-sm font-semibold uppercase tracking-wide text-[#ff9a63]">Inclusão de Novos Participantes</h3>
               <ul className="mt-3 space-y-2 text-sm text-slate-200">
@@ -195,18 +198,7 @@ export default function Regras() {
                 <li>Na junção, os lugares são definidos por novo sorteio no mesmo formato das mesas iniciais.</li>
               </ul>
             </article>
-          </div>
-        </section>
 
-        <section className="space-y-4 rounded-3xl border border-[#244357] bg-[#081723]/92 p-5 shadow-[0_18px_45px_rgba(3,8,14,0.42)]">
-          <header>
-            <h2 className="text-xl font-semibold text-slate-100">Regras do Torneio</h2>
-            <p className="mt-1 text-sm text-slate-300">
-              Parâmetros aplicados no sistema para financeiro, pontuação e premiação.
-            </p>
-          </header>
-
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             <article className="rounded-2xl border border-[#244357] bg-[#0b1a25] p-4">
               <h3 className="text-sm font-semibold uppercase tracking-wide text-[#ff9a63]">Configurações Atuais da Rodada</h3>
               <ul className="mt-3 space-y-2 text-sm text-slate-200">
@@ -263,6 +255,80 @@ export default function Regras() {
               <p className="mt-2 text-sm text-slate-300">
                 Os valores {TEMPORADA_POR_JOGADOR} e {CAIXINHA_POR_JOGADOR} por jogador são abatidos do buy-in para compor os acumulados de temporada e caixinha.
               </p>
+            </article>
+          </div>
+        </section>
+
+        <section className="space-y-4 rounded-3xl border border-[#244357] bg-[#081723]/92 p-5 shadow-[0_18px_45px_rgba(3,8,14,0.42)]">
+          <header>
+            <h2 className="text-xl font-semibold text-slate-100">Instruções de Uso do Site</h2>
+            <p className="mt-1 text-sm text-slate-300">
+              Nesta seção você encontra o que cada tela faz e vídeos rápidos para consulta.
+            </p>
+          </header>
+
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <article className="space-y-3 rounded-2xl border border-[#244357] bg-[#0b1a25] p-4">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-[#ff9a63]">Pré-jogo</h3>
+              <p className="text-sm text-slate-200">
+                Use a página Pré-jogo para montar a rodada antes do início: selecionar etapa pendente, marcar participantes e gerar o sorteio inicial das mesas.
+              </p>
+              <p className="text-xs text-slate-400">
+                O vídeo abaixo mostra o fluxo de sorteio do Pré-jogo.
+              </p>
+              <div className="relative overflow-hidden rounded-xl border border-[#244357] bg-black pt-[177.78%]">
+                <iframe
+                  src={VIDEO_PRE_JOGO}
+                  title="Como funciona o sorteio do Pré-jogo"
+                  className="absolute inset-0 h-full w-full"
+                  loading="lazy"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  referrerPolicy="strict-origin-when-cross-origin"
+                  allowFullScreen
+                />
+              </div>
+            </article>
+
+            <article className="space-y-3 rounded-2xl border border-[#244357] bg-[#0b1a25] p-4">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-[#ff9a63]">Dia de Poker</h3>
+              <p className="text-sm text-slate-200">
+                A página Dia de Poker é usada durante a rodada para acompanhar as mesas, registrar rebuys/add-on e operar funções de mesa em tempo real.
+              </p>
+              <p className="text-xs text-slate-400">
+                O vídeo abaixo mostra o uso da função de mesário.
+              </p>
+              <div className="relative overflow-hidden rounded-xl border border-[#244357] bg-black pt-[177.78%]">
+                <iframe
+                  src={VIDEO_DIA_DE_POKER}
+                  title="Como usar função de mesário no Dia de Poker"
+                  className="absolute inset-0 h-full w-full"
+                  loading="lazy"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  referrerPolicy="strict-origin-when-cross-origin"
+                  allowFullScreen
+                />
+              </div>
+            </article>
+
+            <article className="space-y-3 rounded-2xl border border-[#244357] bg-[#0b1a25] p-4 md:col-span-2 xl:col-span-1">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-[#ff9a63]">Atalho no iPhone</h3>
+              <p className="text-sm text-slate-200">
+                Para usar o site como app no iPhone, adicione o atalho na tela inicial do Safari. Isso facilita o acesso rápido no dia da rodada.
+              </p>
+              <p className="text-xs text-slate-400">
+                O vídeo abaixo mostra o passo a passo.
+              </p>
+              <div className="relative overflow-hidden rounded-xl border border-[#244357] bg-black pt-[177.78%]">
+                <iframe
+                  src={VIDEO_IPHONE_APP}
+                  title="Como adicionar o site como app no iPhone"
+                  className="absolute inset-0 h-full w-full"
+                  loading="lazy"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  referrerPolicy="strict-origin-when-cross-origin"
+                  allowFullScreen
+                />
+              </div>
             </article>
           </div>
         </section>

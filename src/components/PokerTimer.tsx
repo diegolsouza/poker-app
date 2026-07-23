@@ -13,6 +13,7 @@ type TimerConfig = {
   blindLevels: BlindLevelConfig[];
   intervalMinutes: number;
   intervalExtraMinutes: number;
+  soundModes?: Partial<Record<SoundKey, SoundMode>>;
 };
 
 type BlindLevel = {
@@ -34,6 +35,10 @@ type TimerState = {
   lastBlindStartedAt: number | null;
 };
 
+type SoundMode = 'narrador' | 'alarme' | 'sem_som';
+type SoundKey = 'anteEmJogo' | 'fimRebuy' | 'horaDoIntervalo' | 'fimDoIntervalo' | 'virouOBlind';
+type SynthAlarmKind = 'blind' | 'intervalStart' | 'intervalEnd' | 'rebuyEnd' | 'anteStart';
+
 // ===================== CONSTANTES =====================
 const DEFAULT_BLIND_LEVELS: BlindLevelConfig[] = [
   { bigBlind: 100, minutes: 20 },
@@ -52,10 +57,32 @@ const DEFAULT_TIMER_CONFIG: TimerConfig = {
   blindLevels: DEFAULT_BLIND_LEVELS,
   intervalMinutes: 20,
   intervalExtraMinutes: 10,
+  soundModes: {
+    anteEmJogo: 'narrador',
+    fimRebuy: 'narrador',
+    horaDoIntervalo: 'narrador',
+    fimDoIntervalo: 'narrador',
+    virouOBlind: 'narrador',
+  },
 };
 
 const LAST_BLIND_DURATION_SECONDS = 1 * 60; // 15 minutos
 const REBUY_CUTOFF_LEVEL = 6; // índice do nível 7 (base 0) - último nível com rebuy
+const ANTE_START_LEVEL = 4; // índice do nível 5 (base 0)
+const SOUND_SRC: Record<SoundKey, string> = {
+  anteEmJogo: '/anteemjogo.mp3',
+  fimRebuy: '/fimrebuy.mp3',
+  horaDoIntervalo: '/horadointervalo.mp3',
+  fimDoIntervalo: '/fimdointervalo.mp3',
+  virouOBlind: '/virouoblind.mp3',
+};
+const SOUND_TO_SYNTH_KIND: Record<SoundKey, SynthAlarmKind> = {
+  anteEmJogo: 'anteStart',
+  fimRebuy: 'rebuyEnd',
+  horaDoIntervalo: 'intervalStart',
+  fimDoIntervalo: 'intervalEnd',
+  virouOBlind: 'blind',
+};
 
 // ===================== UTILITÁRIOS =====================
 function formatTime(seconds: number): string {
@@ -103,8 +130,151 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
   const autoAdvancedForLevelRef = useRef<number | null>(null);
   const autoEndedIntervalRef = useRef<boolean>(false);
   const prevBlindLevelRef = useRef<number>(-1);
+  const prevStatusRef = useRef<TimerStatus | null>(null);
+  const prevShowRebuyCutoffRef = useRef<boolean>(false);
   const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const audioByKeyRef = useRef<Partial<Record<SoundKey, HTMLAudioElement>>>({});
   const [isFlashing, setIsFlashing] = useState(false);
+
+  /*
+  Código antigo de alarmes sintéticos (WebAudio Oscillator), mantido comentado para referência:
+  - type AlarmKind = 'blind' | 'intervalStart' | 'intervalEnd' | 'rebuyEnd';
+  - getAudioContext / unlockAlarmAudio / playAlarm
+  */
+
+  const playMp3Alarm = (key: SoundKey) => {
+    const base = audioByKeyRef.current[key];
+
+    if (!base) {
+      return;
+    }
+
+    // Clona para permitir tocar novamente mesmo que o anterior ainda esteja em reprodução.
+    const instance = base.cloneNode(true) as HTMLAudioElement;
+    instance.volume = 1;
+    instance.currentTime = 0;
+    void instance.play().catch(() => {
+      // Navegadores podem bloquear autoplay até interação do usuário.
+    });
+  };
+
+  const playSynthAlarm = (kind: SynthAlarmKind) => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctx) {
+      return;
+    }
+
+    const context = new Ctx();
+    const startAt = context.currentTime + 0.01;
+
+    const profileMap: Record<
+      SynthAlarmKind,
+      {
+        pulses: number;
+        pulseDuration: number;
+        pulseGap: number;
+        wave: OscillatorType;
+        freqs: number[];
+        secondaryFreqFactor: number;
+      }
+    > = {
+      blind: {
+        pulses: 5,
+        pulseDuration: 0.28,
+        pulseGap: 0.05,
+        wave: 'square',
+        freqs: [1280, 980, 1320, 1020, 1400],
+        secondaryFreqFactor: 0.5,
+      },
+      intervalStart: {
+        pulses: 6,
+        pulseDuration: 0.24,
+        pulseGap: 0.04,
+        wave: 'sawtooth',
+        freqs: [680, 860, 1040, 1220, 1400, 1580],
+        secondaryFreqFactor: 1.5,
+      },
+      intervalEnd: {
+        pulses: 6,
+        pulseDuration: 0.24,
+        pulseGap: 0.04,
+        wave: 'triangle',
+        freqs: [1850, 1600, 1450, 1720, 1500, 1880],
+        secondaryFreqFactor: 0.66,
+      },
+      rebuyEnd: {
+        pulses: 8,
+        pulseDuration: 0.26,
+        pulseGap: 0.04,
+        wave: 'square',
+        freqs: [420, 420, 1380, 420, 1680, 420, 1860, 420],
+        secondaryFreqFactor: 2,
+      },
+      anteStart: {
+        pulses: 5,
+        pulseDuration: 0.22,
+        pulseGap: 0.04,
+        wave: 'sawtooth',
+        freqs: [900, 1120, 1320, 900, 1440],
+        secondaryFreqFactor: 0.75,
+      },
+    };
+
+    const profile = profileMap[kind];
+
+    for (let i = 0; i < profile.pulses; i += 1) {
+      const pulseStart = startAt + i * (profile.pulseDuration + profile.pulseGap);
+      const pulseEnd = pulseStart + profile.pulseDuration;
+
+      const oscillator = context.createOscillator();
+      const secondaryOscillator = context.createOscillator();
+      const gain = context.createGain();
+
+      oscillator.type = profile.wave;
+      const freq = profile.freqs[i % profile.freqs.length];
+      oscillator.frequency.setValueAtTime(freq, pulseStart);
+
+      secondaryOscillator.type = profile.wave;
+      secondaryOscillator.frequency.setValueAtTime(freq * profile.secondaryFreqFactor, pulseStart);
+
+      gain.gain.setValueAtTime(0.0001, pulseStart);
+      gain.gain.exponentialRampToValueAtTime(1, pulseStart + 0.02);
+      gain.gain.setValueAtTime(0.92, pulseStart + Math.max(0.03, profile.pulseDuration * 0.45));
+      gain.gain.exponentialRampToValueAtTime(0.0001, pulseEnd);
+
+      oscillator.connect(gain);
+      secondaryOscillator.connect(gain);
+      gain.connect(context.destination);
+
+      oscillator.start(pulseStart);
+      secondaryOscillator.start(pulseStart);
+      oscillator.stop(pulseEnd + 0.01);
+      secondaryOscillator.stop(pulseEnd + 0.01);
+    }
+
+    const totalDurationMs = Math.ceil((profile.pulses * (profile.pulseDuration + profile.pulseGap) + 0.1) * 1000);
+    window.setTimeout(() => {
+      void context.close();
+    }, totalDurationMs);
+  };
+
+  const triggerSound = (key: SoundKey) => {
+    const mode = timerConfig.soundModes?.[key] ?? 'narrador';
+    if (mode === 'sem_som') {
+      return;
+    }
+
+    if (mode === 'alarme') {
+      playSynthAlarm(SOUND_TO_SYNTH_KIND[key]);
+      return;
+    }
+
+    playMp3Alarm(key);
+  };
 
   // Gerar blind levels dinamicamente baseado na configuração carregada
   const blindLevels: BlindLevel[] = useMemo(() => {
@@ -139,7 +309,14 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
       if (data && data.timer_config_json) {
         const config = data.timer_config_json as TimerConfig;
         if (config.blindLevels && Array.isArray(config.blindLevels) && config.blindLevels.length > 0) {
-          setTimerConfig(config);
+          setTimerConfig({
+            ...DEFAULT_TIMER_CONFIG,
+            ...config,
+            soundModes: {
+              ...DEFAULT_TIMER_CONFIG.soundModes,
+              ...(config.soundModes ?? {}),
+            },
+          });
         }
       }
     } catch (err) {
@@ -233,6 +410,24 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
 
     return () => {
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    };
+  }, []);
+
+  // Pré-carrega alarmes MP3 definidos em /public.
+  useEffect(() => {
+    const loaded: Partial<Record<SoundKey, HTMLAudioElement>> = {};
+
+    (Object.keys(SOUND_SRC) as SoundKey[]).forEach((key) => {
+      const audio = new Audio(SOUND_SRC[key]);
+      audio.preload = 'auto';
+      audio.volume = 1;
+      loaded[key] = audio;
+    });
+
+    audioByKeyRef.current = loaded;
+
+    return () => {
+      audioByKeyRef.current = {};
     };
   }, []);
 
@@ -564,18 +759,46 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
 
   // ============ FLASH AO MUDAR DE BLIND ============
   useEffect(() => {
-    if (prevBlindLevelRef.current !== -1 && timerState.blindLevel !== prevBlindLevelRef.current && isMaximized) {
-      setIsFlashing(true);
-      if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
-      flashTimeoutRef.current = setTimeout(() => {
-        setIsFlashing(false);
-      }, 3000);
+    const previousBlindLevel = prevBlindLevelRef.current;
+    const blindLevelIncreased = previousBlindLevel !== -1 && timerState.blindLevel > previousBlindLevel;
+
+    if (blindLevelIncreased) {
+      triggerSound('virouOBlind');
+
+      if (timerState.blindLevel === ANTE_START_LEVEL) {
+        triggerSound('anteEmJogo');
+      }
+
+      if (isMaximized) {
+        setIsFlashing(true);
+        if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
+        flashTimeoutRef.current = setTimeout(() => {
+          setIsFlashing(false);
+        }, 3000);
+      }
     }
+
     prevBlindLevelRef.current = timerState.blindLevel;
+
     return () => {
       if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
     };
   }, [timerState.blindLevel, isMaximized]);
+
+  // ============ ALARMES DE INTERVALO ============
+  useEffect(() => {
+    const previousStatus = prevStatusRef.current;
+
+    if (previousStatus !== null && previousStatus !== timerState.status) {
+      if (timerState.status === 'interval') {
+        triggerSound('horaDoIntervalo');
+      } else if (previousStatus === 'interval' && timerState.status === 'running') {
+        triggerSound('fimDoIntervalo');
+      }
+    }
+
+    prevStatusRef.current = timerState.status;
+  }, [timerState.status]);
 
   // ============ CONFIRMATION HANDLERS ============
   const handlePauseWithConfirm = () => {
@@ -599,6 +822,16 @@ export default function PokerTimer({ etapaId, isAdmin, isMesarioUnlocked, forced
     remainingSeconds <= 20 &&
     remainingSeconds > 0;
   const showWinner = timerState.lastBlindMode && remainingSeconds <= 0;
+
+  // Dispara o alarme de fim do rebuy exatamente quando o aviso visual aparece (20s finais do nível 7).
+  useEffect(() => {
+    const enteredCutoffWindow = showRebuyCutoff && !prevShowRebuyCutoffRef.current;
+    if (enteredCutoffWindow) {
+      triggerSound('fimRebuy');
+    }
+
+    prevShowRebuyCutoffRef.current = showRebuyCutoff;
+  }, [showRebuyCutoff]);
 
   // Ocultar timer nas páginas públicas até iniciar
   if (!showTimer) {

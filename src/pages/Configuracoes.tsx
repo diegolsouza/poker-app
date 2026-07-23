@@ -30,10 +30,29 @@ type BlindLevelConfig = {
   minutes: number;
 };
 
+type SoundMode = 'narrador' | 'alarme' | 'sem_som';
+
+type TimerSoundModes = {
+  anteEmJogo: SoundMode;
+  fimRebuy: SoundMode;
+  horaDoIntervalo: SoundMode;
+  fimDoIntervalo: SoundMode;
+  virouOBlind: SoundMode;
+};
+
 type TimerConfig = {
   blindLevels: BlindLevelConfig[];
   intervalMinutes: number;
   intervalExtraMinutes: number;
+  soundModes?: Partial<TimerSoundModes>;
+};
+
+const DEFAULT_SOUND_MODES: TimerSoundModes = {
+  anteEmJogo: 'narrador',
+  fimRebuy: 'narrador',
+  horaDoIntervalo: 'narrador',
+  fimDoIntervalo: 'narrador',
+  virouOBlind: 'narrador',
 };
 
 function parseMoney(value: string): number {
@@ -98,6 +117,7 @@ export default function Configuracoes() {
   );
   const [intervalMinutes, setIntervalMinutes] = useState('20');
   const [intervalExtraMinutes, setIntervalExtraMinutes] = useState('10');
+  const [soundModes, setSoundModes] = useState<TimerSoundModes>(DEFAULT_SOUND_MODES);
 
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -147,6 +167,10 @@ export default function Configuracoes() {
           }
           setIntervalMinutes(String(timerConfig.intervalMinutes || 20));
           setIntervalExtraMinutes(String(timerConfig.intervalExtraMinutes || 10));
+          setSoundModes({
+            ...DEFAULT_SOUND_MODES,
+            ...(timerConfig.soundModes ?? {}),
+          });
         }
       }
 
@@ -188,6 +212,7 @@ export default function Configuracoes() {
         })),
         intervalMinutes: Number.parseInt(intervalMinutes, 10),
         intervalExtraMinutes: Number.parseInt(intervalExtraMinutes, 10),
+        soundModes,
       } as TimerConfig,
     };
 
@@ -461,6 +486,40 @@ export default function Configuracoes() {
                   className="mt-1 h-10 w-full rounded-lg border border-[#244357] bg-[#081723] px-3 text-slate-50 outline-none transition focus:border-[#ff5e00]"
                 />
               </label>
+            </div>
+
+            <div className="mt-5 rounded-xl border border-[#244357] bg-[#081723] p-4">
+              <h3 className="text-sm font-semibold text-slate-100">Sons do Timer por Gatilho</h3>
+              <p className="mt-1 text-xs text-slate-400">Para cada evento, escolha entre Narrador (MP3), Alarme (sintético) ou Sem som.</p>
+
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                {[
+                  ['anteEmJogo', 'Início do nível 5 (ANTE em jogo)'],
+                  ['fimRebuy', '20s finais do nível 7 (fim do rebuy)'],
+                  ['horaDoIntervalo', 'Início do intervalo'],
+                  ['fimDoIntervalo', 'Fim do intervalo'],
+                  ['virouOBlind', 'Virada de blind (fim de cada nível)'],
+                ].map(([key, label]) => (
+                  <label key={key} className="text-xs font-medium text-slate-300">
+                    {label}
+                    <select
+                      value={soundModes[key as keyof TimerSoundModes]}
+                      onChange={(event) =>
+                        setSoundModes((prev) => ({
+                          ...prev,
+                          [key]: event.target.value as SoundMode,
+                        }))
+                      }
+                      disabled={isDisabled}
+                      className="mt-1 h-10 w-full rounded-lg border border-[#244357] bg-[#0b1a25] px-3 text-slate-50 outline-none transition focus:border-[#ff5e00]"
+                    >
+                      <option value="narrador">Narrador</option>
+                      <option value="alarme">Alarme</option>
+                      <option value="sem_som">Sem som</option>
+                    </select>
+                  </label>
+                ))}
+              </div>
             </div>
           </section>
 

@@ -3,19 +3,21 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import logo from '../assets/logo.png';
 import { isAdminAuthenticated, logoutAdmin } from '../utils/adminAuth';
 
-const commonNavItems = [
-  { label: 'Ranking', to: '/' },
+const publicNavItems = [
   { label: 'Pré-jogo', to: '/pre-jogo' },
   { label: 'Dia de Poker', to: '/dia-de-poker' },
+  { label: 'Ranking', to: '/' },
   { label: 'Financeiro', to: '/financeiro' },
   { label: 'Premiação Final', to: '/premiacao-final' },
   { label: 'Regras', to: '/regras' },
 ];
 
-const adminNavItems = [
+const adminVisibleNavItems = [
+  { label: 'Pré-jogo', to: '/pre-jogo' },
+  { label: 'Dia de Poker', to: '/admin/dia-de-poker' },
   { label: 'Cadastro', to: '/admin/cadastro-basico' },
   { label: 'Resultados', to: '/admin/resultados' },
-  { label: 'Dia de Poker', to: '/admin/dia-de-poker' },
+  { label: 'Regras', to: '/regras' },
   { label: 'Configurações', to: '/admin/configuracoes' },
 ];
 
@@ -24,15 +26,7 @@ export default function Layout() {
   const navigate = useNavigate();
   const adminLoggedIn = isAdminAuthenticated();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const visibleCommonNavItems = adminLoggedIn
-    ? commonNavItems.filter(
-        (item) =>
-          item.to !== '/' &&
-          item.to !== '/financeiro' &&
-          item.to !== '/premiacao-final' &&
-          item.to !== '/dia-de-poker',
-      )
-    : commonNavItems;
+  const visibleCommonNavItems = adminLoggedIn ? adminVisibleNavItems : publicNavItems;
 
   // Accessing pathname makes this component re-evaluate auth on route changes.
   void location.pathname;
@@ -86,6 +80,24 @@ export default function Layout() {
               </div>
             </div>
 
+            <a
+              href="https://open.spotify.com/playlist/5wg2fqy0ZBF8PW1yemdLLN?si=8122474bdc5e4c48"
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Abrir playlist no Spotify"
+              className="inline-flex items-center gap-2 rounded-full border border-[#1db954]/45 bg-[#1db954]/10 px-3 py-2 text-sm font-semibold text-[#1ed760] transition hover:bg-[#1db954]/20"
+            >
+              <svg viewBox="0 0 168 168" aria-hidden="true" className="h-5 w-5 fill-current">
+                <path d="M84,0C37.7,0,0,37.7,0,84c0,46.3,37.7,84,84,84s84-37.7,84-84C168,37.7,130.3,0,84,0z M122.3,121.1
+                  c-1.5,2.4-4.7,3.2-7.1,1.7c-19.5-11.9-44.1-14.6-73.2-8.1c-2.7,0.6-5.4-1.1-6-3.8c-0.6-2.7,1.1-5.4,3.8-6
+                  c31.8-7.1,58.9-4,80.6,9.2C123,115.5,123.8,118.7,122.3,121.1z M132.4,98.7c-1.9,3-5.8,4-8.8,2.1
+                  c-22.4-13.8-56.5-17.8-83-9.8c-3.4,1-7-0.9-8-4.3c-1-3.4,0.9-7,4.3-8c30.2-9.2,67.8-4.7,93.5,11.1
+                  C133.3,91.7,134.3,95.7,132.4,98.7z M133.3,75.4c-26.9-16-71.2-17.4-96.9-9.6c-4.1,1.2-8.5-1.1-9.7-5.2
+                  c-1.2-4.1,1.1-8.5,5.2-9.7c29.4-8.9,78.3-7.2,109.4,11.2c3.7,2.2,4.9,7,2.7,10.7C141.8,76.5,137,77.7,133.3,75.4z"/>
+              </svg>
+              Spotify
+            </a>
+
             <nav aria-label="Navegação principal" className="flex flex-wrap items-center gap-2 rounded-full border border-[#2d4659]/70 bg-[#0d2431]/82 p-1 shadow-[0_10px_28px_rgba(1,4,8,0.45)]">
               {visibleCommonNavItems.map((item) => (
                 <NavLink
@@ -105,34 +117,15 @@ export default function Layout() {
               ))}
 
               {adminLoggedIn ? (
-                <>
-                  {adminNavItems.map((item) => (
-                    <NavLink
-                      key={item.to}
-                      to={item.to}
-                      className={({ isActive }) =>
-                        [
-                          'rounded-full px-3 py-2 text-sm font-medium transition-all duration-200 sm:px-4',
-                          isActive
-                            ? 'bg-[#ff5e00] text-white shadow-[0_8px_20px_rgba(255,94,0,0.32)]'
-                            : 'text-slate-200 hover:bg-[#123042] hover:text-white',
-                        ].join(' ')
-                      }
-                    >
-                      {item.label}
-                    </NavLink>
-                  ))}
-
-                  <button
-                    type="button"
-                    onClick={handleLogout}
-                    title="Sair Admin"
-                    aria-label="Sair Admin"
-                    className="rounded-full px-3 py-2 text-sm font-medium text-slate-200 transition-all duration-200 hover:bg-[#123042] hover:text-white"
-                  >
-                    <span className="text-rose-400">➡️</span>
-                  </button>
-                </>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  title="Sair Admin"
+                  aria-label="Sair Admin"
+                  className="rounded-full px-3 py-2 text-sm font-medium text-slate-200 transition-all duration-200 hover:bg-[#123042] hover:text-white"
+                >
+                  <span className="text-rose-400">➡️</span>
+                </button>
               ) : (
                 <NavLink
                   to="/admin/login"
@@ -174,34 +167,15 @@ export default function Layout() {
               ))}
 
               {adminLoggedIn ? (
-                <>
-                  {adminNavItems.map((item) => (
-                    <NavLink
-                      key={item.to}
-                      to={item.to}
-                      className={({ isActive }) =>
-                        [
-                          'rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200',
-                          isActive
-                            ? 'bg-[#ff5e00] text-white shadow-[0_8px_20px_rgba(255,94,0,0.32)]'
-                            : 'text-slate-200 hover:bg-[#123042] hover:text-white',
-                        ].join(' ')
-                      }
-                    >
-                      {item.label}
-                    </NavLink>
-                  ))}
-
-                  <button
-                    type="button"
-                    onClick={handleLogout}
-                    title="Sair Admin"
-                    aria-label="Sair Admin"
-                    className="rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-200 transition-all duration-200 hover:bg-[#123042] hover:text-white"
-                  >
-                    <span className="text-rose-400">➡️</span> Sair Admin
-                  </button>
-                </>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  title="Sair Admin"
+                  aria-label="Sair Admin"
+                  className="rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-200 transition-all duration-200 hover:bg-[#123042] hover:text-white"
+                >
+                  <span className="text-rose-400">➡️</span> Sair Admin
+                </button>
               ) : (
                 <NavLink
                   to="/admin/login"

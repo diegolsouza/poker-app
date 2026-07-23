@@ -1555,7 +1555,8 @@ export default function DiaDePoker() {
               Controle de etapa, operação dos mesários e registro incremental de rebuys/add-on por voz e manual.
             </p> */}
           </div>
-          {!canViewAdminTab && selectedEtapaId && (
+
+          {selectedEtapaId && (
             <button
               type="button"
               onClick={() => setIsPanelMode(!isPanelMode)}
